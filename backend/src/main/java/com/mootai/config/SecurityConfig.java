@@ -3,6 +3,7 @@ package com.mootai.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -31,8 +32,10 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 允许OPTIONS预检请求
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/cases").authenticated()
+                .requestMatchers("/api/cases/upload").authenticated() // 文件上传需要认证
+                .requestMatchers("/api/cases/**").authenticated() // 案件相关接口需要认证
                 .anyRequest().permitAll() // 允许其他请求，避免403错误
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

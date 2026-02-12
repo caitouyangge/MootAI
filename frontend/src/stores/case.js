@@ -14,9 +14,17 @@ export const useCaseStore = defineStore('case', () => {
   // 案件描述
   const caseDescription = ref('')
   
+  // 案件ID
+  const caseId = ref(null)
+  
   // 设置身份
   const setIdentity = (identity) => {
     selectedIdentity.value = identity
+  }
+  
+  // 设置案件ID
+  const setCaseId = (id) => {
+    caseId.value = id
   }
   
   // 设置文件列表
@@ -45,6 +53,7 @@ export const useCaseStore = defineStore('case', () => {
     fileList.value = []
     filesConfirmed.value = false
     caseDescription.value = ''
+    caseId.value = null
   }
   
   return {
@@ -52,11 +61,13 @@ export const useCaseStore = defineStore('case', () => {
     fileList,
     filesConfirmed,
     caseDescription,
+    caseId,
     setIdentity,
     setFileList,
     confirmFiles,
     resetConfirm,
     setCaseDescription,
+    setCaseId,
     reset
   }
 })

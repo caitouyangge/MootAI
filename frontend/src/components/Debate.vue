@@ -43,7 +43,7 @@
       <h3 class="section-title">庭审现场</h3>
       <div class="chat-container" ref="chatContainer">
         <div v-if="messages.length === 0" class="empty-tip">
-          <p>请先选择法官类型，庭审将自动开始</p>
+          <p>请先选择法官类型，然后点击"开始庭审"按钮</p>
         </div>
         <div
           v-for="(message, index) in messages"
@@ -137,16 +137,52 @@
           </template>
         </div>
       </div>
+      
+      <!-- 用户输入区域 -->
+      <div v-if="debateStarted && !debateCompleted" class="input-section">
+        <div class="input-wrapper">
+          <el-input
+            v-model="userInput"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入您的发言..."
+            class="user-input"
+            :disabled="isGenerating"
+            @keydown.ctrl.enter="sendMessage"
+          />
+          <div class="input-actions">
+            <el-button
+              type="primary"
+              :loading="isGenerating"
+              :disabled="!userInput.trim() || isGenerating"
+              @click="sendMessage"
+            >
+              {{ isGenerating ? '生成中...' : '发送' }}
+            </el-button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 生成判决结果按钮 -->
-    <div class="action-section" v-if="debateCompleted">
+    <!-- 操作按钮区域 -->
+    <div class="action-section">
       <el-button
+        v-if="!debateStarted"
+        type="primary"
+        size="large"
+        class="start-btn"
+        :disabled="!selectedJudgeType"
+        @click="startDebate"
+      >
+        开始庭审
+      </el-button>
+      <el-button
+        v-if="debateCompleted"
         type="primary"
         size="large"
         class="generate-btn"
         @click="generateVerdict"
-        >
+      >
         生成判决书
       </el-button>
     </div>
@@ -158,13 +194,18 @@ import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useCaseStore } from '@/stores/case'
+import request from '@/utils/request'
 
 const route = useRoute()
 const router = useRouter()
 
+// 定义emit
+const emit = defineEmits(['complete'])
+
 // 获取身份信息（从store或route）
 const caseStore = useCaseStore()
 const userIdentity = ref(caseStore.selectedIdentity || route.query.identity || 'plaintiff')
+const caseDescription = ref(caseStore.caseDescription || '')
 
 // 法官类型
 const judgeTypes = ref([
@@ -196,11 +237,12 @@ const judgeTypes = ref([
 ])
 
 const selectedJudgeType = ref('')
+const debateStarted = ref(false)
+const isGenerating = ref(false)
+const userInput = ref('')
 
 const onJudgeTypeChange = () => {
-  if (selectedJudgeType.value && messages.value.length === 0) {
-    startDebate()
-  }
+  // 法官类型改变时不做任何操作，等待用户点击"开始庭审"
 }
 
 // 诉讼策略
@@ -234,66 +276,102 @@ const saveEdit = (index) => {
 }
 
 // 开始庭审
-const startDebate = () => {
+const startDebate = async () => {
+  if (!selectedJudgeType.value) {
+    ElMessage.warning('请先选择法官类型')
+    return
+  }
+  
   messages.value = []
   debateCompleted.value = false
+  debateStarted.value = true
   
   // 法官宣布开始
-  addMessage('judge', '法官', '现在开庭。请原告陈述诉讼请求和事实理由。')
+  const judgePrompt = userIdentity.value === 'plaintiff' 
+    ? '现在开庭。请原告陈述诉讼请求和事实理由。'
+    : '现在开庭。请被告针对原告的指控进行答辩。'
   
-  // 延迟添加后续对话
-  setTimeout(() => {
-    addMessage('plaintiff', '原告', '尊敬的法官，我方请求法院判令被告返还已支付的服务费30万元，并支付违约金10万元。事实和理由如下：我方与被告于2023年1月签订技术服务合同，约定被告提供技术服务，合同金额50万元。我方已按约定支付首付款30万元，但被告未能按合同约定提供服务，构成违约。')
-  }, 1000)
+  await generateAiResponse('judge', judgePrompt)
+}
+
+// 发送用户消息
+const sendMessage = async () => {
+  if (!userInput.value.trim() || isGenerating.value) {
+    return
+  }
   
-  setTimeout(() => {
-    addMessage('defendant', '被告', '尊敬的法官，我方对原告的陈述有异议。我方确实与原告签订了合同，但原告未能提供必要的配合条件，导致我方无法正常履行合同。且原告主张的违约金过高，不符合法律规定。')
-  }, 2000)
+  const userText = userInput.value.trim()
+  userInput.value = ''
   
-  setTimeout(() => {
-    addMessage('judge', '法官', '请双方就争议焦点进行辩论。争议焦点一：被告是否存在违约行为？')
-  }, 3000)
+  // 添加用户消息
+  addMessage(userIdentity.value, userIdentity.value === 'plaintiff' ? '原告' : '被告', userText)
   
-  setTimeout(() => {
-    addMessage('plaintiff', '原告', '我方认为被告存在明显违约行为。合同明确约定了服务内容和时间节点，但被告在收到首付款后，未能按约定时间提供任何服务。我方多次催促，被告均以各种理由推脱。')
-  }, 4000)
+  // 生成对方律师的回复
+  const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
+  await generateAiResponse(opponentRole, userText)
   
-  setTimeout(() => {
-    addMessage('defendant', '被告', '我方不认可原告的说法。合同履行需要双方配合，原告未能提供合同约定的工作环境和资料，导致我方无法开展工作。这属于原告的违约行为，而非我方违约。')
-  }, 5000)
+  // 生成法官的回复（可选，根据对话流程决定）
+  // 这里可以根据对话轮次决定是否生成法官回复
+  if (messages.value.length % 4 === 0) {
+    await generateAiResponse('judge', '请继续辩论。')
+  }
+}
+
+// 生成AI回复
+const generateAiResponse = async (role, prompt) => {
+  if (isGenerating.value) return
   
-  setTimeout(() => {
-    addMessage('judge', '法官', '请原告提供相关证据材料。')
-  }, 6000)
+  isGenerating.value = true
   
-  setTimeout(() => {
-    addMessage('plaintiff', '原告', '我方提交了以下证据：1. 双方签订的服务合同原件；2. 银行转账凭证，证明已支付30万元；3. 与被告的沟通记录，显示被告承认无法履行合同。')
-  }, 7000)
-  
-  setTimeout(() => {
-    addMessage('judge', '法官', '请被告质证。')
-  }, 8000)
-  
-  setTimeout(() => {
-    addMessage('defendant', '被告', '我方对证据的真实性无异议，但对证明目的有异议。沟通记录显示的是我方在尝试解决问题，而非承认违约。')
-  }, 9000)
-  
-  setTimeout(() => {
-    addMessage('judge', '法官', '关于违约金的问题，请双方发表意见。')
-  }, 10000)
-  
-  setTimeout(() => {
-    addMessage('plaintiff', '原告', '合同约定的违约金为合同金额的20%，即10万元，符合法律规定。且被告的违约行为给我方造成了实际损失。')
-  }, 11000)
-  
-  setTimeout(() => {
-    addMessage('defendant', '被告', '我方认为违约金过高。根据《民法典》相关规定，违约金不应超过实际损失的30%。原告未能证明其实际损失达到10万元，因此违约金应当调整。')
-  }, 12000)
-  
-  setTimeout(() => {
-    addMessage('judge', '法官', '法庭调查和辩论结束。现在休庭，合议庭将进行评议。')
-    debateCompleted.value = true
-  }, 13000)
+  try {
+    // 准备消息历史（包含当前prompt作为上下文）
+    const messageHistory = messages.value.map(msg => ({
+      role: msg.role,
+      name: msg.name,
+      text: msg.text
+    }))
+    
+    // 如果prompt不为空，添加一个临时消息作为上下文
+    if (prompt) {
+      messageHistory.push({
+        role: role,
+        name: role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告'),
+        text: prompt
+      })
+    }
+    
+    const response = await request.post('/debate/generate', {
+      user_identity: userIdentity.value,
+      current_role: role,
+      messages: messageHistory,
+      judge_type: selectedJudgeType.value || 'neutral',
+      case_description: caseDescription.value || ''
+    })
+    
+    if (response.code === 200 && response.data) {
+      const aiText = response.data
+      const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
+      addMessage(role, roleName, aiText)
+      
+      // 检查是否应该结束庭审
+      if (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭')) {
+        debateCompleted.value = true
+        // 保存对话历史到localStorage，供判决书生成使用
+        localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+        // 标记辩论完成
+        localStorage.setItem('debateCompleted', 'true')
+        // 触发完成事件
+        emit('complete')
+      }
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (error) {
+    console.error('生成AI回复失败:', error)
+    ElMessage.error('生成失败，请重试: ' + (error.message || '未知错误'))
+  } finally {
+    isGenerating.value = false
+  }
 }
 
 // 添加消息
@@ -307,6 +385,9 @@ const addMessage = (role, name, text) => {
     text,
     time
   })
+  
+  // 实时保存对话历史到localStorage
+  localStorage.setItem('debateMessages', JSON.stringify(messages.value))
   
   // 滚动到底部
   nextTick(() => {
@@ -697,18 +778,62 @@ onMounted(() => {
   resize: none;
 }
 
+/* 用户输入区域 */
+.input-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-input {
+  width: 100%;
+}
+
+.input-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* 操作按钮 */
 .action-section {
   text-align: center;
   padding: 20px 0;
 }
 
+.start-btn,
 .generate-btn {
   width: 200px;
   height: 50px;
   font-size: 14px;
   font-weight: 600;
   border-radius: 6px;
+}
+
+.start-btn {
+  background: #409eff;
+  border-color: #409eff;
+}
+
+.start-btn:hover {
+  background: #66b1ff;
+  border-color: #66b1ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.start-btn:disabled {
+  background: #c0c4cc;
+  border-color: #c0c4cc;
+  cursor: not-allowed;
+}
+
+.generate-btn {
   background: #07c160;
   border-color: #07c160;
 }

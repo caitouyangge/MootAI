@@ -50,21 +50,29 @@
         <!-- 庭中辩论 -->
         <div 
           class="sidebar-item" 
-          :class="{ 'active': activeTab === 'debate' }"
+          :class="{ 
+            'active': activeTab === 'debate',
+            'disabled': isStepDisabled('debate')
+          }"
           @click="navigateToTab('debate')"
         >
           <span class="sidebar-icon">⚖️</span>
           <span class="sidebar-text">庭中辩论</span>
+          <span v-if="isStepDisabled('debate')" class="lock-icon">🔒</span>
         </div>
         
         <!-- 庭后宣判 -->
         <div 
           class="sidebar-item" 
-          :class="{ 'active': activeTab === 'verdict' }"
+          :class="{ 
+            'active': activeTab === 'verdict',
+            'disabled': isStepDisabled('verdict')
+          }"
           @click="navigateToTab('verdict')"
         >
           <span class="sidebar-icon">📜</span>
           <span class="sidebar-text">庭后宣判</span>
+          <span v-if="isStepDisabled('verdict')" class="lock-icon">🔒</span>
         </div>
       </div>
     </div>
@@ -73,11 +81,24 @@
     <div class="courtroom-wrapper">
       <!-- 页面标题 -->
       <div class="page-header fade-in">
-        <h1 class="page-title">
-          <span class="title-icon">⚖️</span>
-          <span class="title-text">模拟法庭</span>
-        </h1>
-        <p class="page-subtitle">智能诉讼审判模拟系统</p>
+        <div class="header-content">
+          <div class="header-left">
+            <h1 class="page-title">
+              <span class="title-icon">⚖️</span>
+              <span class="title-text">模拟法庭</span>
+            </h1>
+            <p class="page-subtitle">智能诉讼审判模拟系统</p>
+          </div>
+          <el-button
+            type="warning"
+            size="default"
+            class="reset-btn"
+            @click="handleReset"
+            :icon="Refresh"
+          >
+            重置
+          </el-button>
+        </div>
       </div>
       
       <!-- 顶部导航标签 -->
@@ -86,11 +107,15 @@
           v-for="tab in tabs"
           :key="tab.key"
           class="nav-tab"
-          :class="{ 'active': activeTab === tab.key }"
+          :class="{ 
+            'active': activeTab === tab.key,
+            'disabled': isStepDisabled(tab.key)
+          }"
           @click="navigateToTab(tab.key)"
         >
           <span class="tab-icon">{{ tab.icon }}</span>
           <span class="tab-text">{{ tab.name }}</span>
+          <span v-if="isStepDisabled(tab.key)" class="tab-lock">🔒</span>
           <div class="tab-indicator"></div>
         </div>
       </div>
@@ -102,8 +127,12 @@
           ref="preTrialRef"
           :active-sub-tab="pretrialSubTab"
           @update:active-sub-tab="pretrialSubTab = $event"
+          @complete="completeStep('pretrial')"
         />
-        <Debate v-else-if="activeTab === 'debate'" />
+        <Debate 
+          v-else-if="activeTab === 'debate'" 
+          @complete="completeStep('debate')"
+        />
         <Verdict v-else-if="activeTab === 'verdict'" />
       </div>
     </div>
@@ -122,23 +151,97 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import PreTrial from '@/components/PreTrial.vue'
 import Debate from '@/components/Debate.vue'
 import Verdict from '@/components/Verdict.vue'
+import { useCaseStore } from '@/stores/case'
 
 const route = useRoute()
 const router = useRouter()
+const caseStore = useCaseStore()
 const activeTab = ref('pretrial')
 const pretrialSubTab = ref('basic')
 const preTrialRef = ref(null)
 
-const tabs = [
-  { key: 'pretrial', name: '庭前准备', icon: '📋' },
-  { key: 'debate', name: '庭中辩论', icon: '⚖️' },
-  { key: 'verdict', name: '庭后宣判', icon: '📜' }
+// 流程步骤定义
+const steps = [
+  { key: 'pretrial', name: '庭前准备', icon: '📋', order: 1 },
+  { key: 'debate', name: '庭中辩论', icon: '⚖️', order: 2 },
+  { key: 'verdict', name: '庭后宣判', icon: '📜', order: 3 }
 ]
+
+const tabs = steps
+
+// 流程状态管理
+const getStepStatus = () => {
+  try {
+    if (typeof localStorage === 'undefined') {
+      return { pretrial: false, debate: false, verdict: false }
+    }
+    const status = localStorage.getItem('courtroomStepStatus')
+    if (status) {
+      try {
+        return JSON.parse(status)
+      } catch {
+        return { pretrial: false, debate: false, verdict: false }
+      }
+    }
+    return { pretrial: false, debate: false, verdict: false }
+  } catch (e) {
+    console.error('获取步骤状态失败:', e)
+    return { pretrial: false, debate: false, verdict: false }
+  }
+}
+
+// 先定义保存函数
+const saveStepStatus = () => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('courtroomStepStatus', JSON.stringify(stepStatus.value))
+    }
+  } catch (e) {
+    console.error('保存步骤状态失败:', e)
+  }
+}
+
+// 然后初始化状态
+const stepStatus = ref(getStepStatus())
+
+// 初始化：庭前准备总是可访问的
+if (!stepStatus.value.pretrial) {
+  stepStatus.value.pretrial = true
+  saveStepStatus()
+}
+
+// 完成当前步骤，解锁下一步
+const completeStep = (stepKey) => {
+  stepStatus.value[stepKey] = true
+  saveStepStatus()
+  
+  // 解锁下一步
+  const currentStep = steps.find(s => s.key === stepKey)
+  if (currentStep) {
+    const nextStep = steps.find(s => s.order === currentStep.order + 1)
+    if (nextStep) {
+      stepStatus.value[nextStep.key] = true
+      saveStepStatus()
+    }
+  }
+}
+
+// 检查步骤是否可访问
+const canAccessStep = (stepKey) => {
+  return stepStatus.value[stepKey] === true
+}
+
+// 获取步骤的禁用状态
+const isStepDisabled = (stepKey) => {
+  return !canAccessStep(stepKey)
+}
 
 // 侧栏显示状态
 const sidebarVisible = ref(false)
@@ -171,6 +274,18 @@ const handleSidebarLeave = () => {
 
 // 导航到主标签
 const navigateToTab = (tab) => {
+  // 检查是否可以访问该步骤
+  if (!canAccessStep(tab)) {
+    const step = steps.find(s => s.key === tab)
+    const currentStep = steps.find(s => stepStatus.value[s.key] && !stepStatus.value[steps.find(ss => ss.order === s.order + 1)?.key])
+    if (currentStep) {
+      ElMessage.warning(`请先完成"${currentStep.name}"，才能进入"${step?.name}"`)
+    } else {
+      ElMessage.warning(`请按顺序完成流程，当前无法访问"${step?.name}"`)
+    }
+    return
+  }
+  
   activeTab.value = tab
   if (tab === 'pretrial') {
     pretrialSubTab.value = 'basic'
@@ -208,18 +323,104 @@ const goHome = () => {
   router.push({ name: 'home' })
 }
 
+// 重置模拟法庭
+const handleReset = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要重置模拟法庭吗？这将清除所有当前进度和数据，包括：\n' +
+      '• 庭前准备的所有步骤\n' +
+      '• 庭中辩论的对话记录\n' +
+      '• 庭后宣判的判决书\n' +
+      '• 案件信息和文件列表',
+      '确认重置',
+      {
+        confirmButtonText: '确定重置',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: false
+      }
+    )
+    
+    // 清除localStorage中的状态
+    try {
+      localStorage.removeItem('courtroomStepStatus')
+      localStorage.removeItem('pretrialStepStatus')
+      localStorage.removeItem('debateMessages')
+      localStorage.removeItem('debateCompleted')
+    } catch (e) {
+      console.error('清除localStorage失败:', e)
+    }
+    
+    // 重置Pinia store
+    caseStore.reset()
+    
+    // 重置页面状态
+    stepStatus.value = { pretrial: false, debate: false, verdict: false }
+    activeTab.value = 'pretrial'
+    pretrialSubTab.value = 'basic'
+    
+    // 重新初始化：庭前准备总是可访问的
+    stepStatus.value.pretrial = true
+    saveStepStatus()
+    
+    ElMessage.success('模拟法庭已重置，已返回初始状态')
+    
+    // 刷新页面以确保所有组件重新初始化
+    // 使用nextTick确保状态更新后再刷新
+    await nextTick()
+    window.location.reload()
+  } catch (error) {
+    // 用户取消操作
+    if (error !== 'cancel') {
+      console.error('重置失败:', error)
+      ElMessage.error('重置失败，请重试')
+    }
+  }
+}
+
+// 定期检查辩论是否完成的定时器
+let debateCheckInterval = null
+
 // 如果路由中有tab参数，切换到对应标签
 onMounted(() => {
-  if (route.query.tab) {
-    activeTab.value = route.query.tab
+  try {
+    if (route.query.tab) {
+      const tab = route.query.tab
+      if (canAccessStep(tab)) {
+        activeTab.value = tab
+      } else {
+        ElMessage.warning('无法访问该步骤，请按顺序完成流程')
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    
+    // 监听Debate组件的完成事件（通过localStorage）
+    const checkDebateComplete = () => {
+      try {
+        const debateCompleted = localStorage.getItem('debateCompleted')
+        if (debateCompleted === 'true' && !stepStatus.value.debate) {
+          completeStep('debate')
+        }
+      } catch (e) {
+        console.error('检查辩论完成状态失败:', e)
+      }
+    }
+    
+    // 定期检查辩论是否完成
+    debateCheckInterval = setInterval(checkDebateComplete, 1000)
+  } catch (e) {
+    console.error('Courtroom页面初始化失败:', e)
   }
-  window.addEventListener('scroll', handleScroll)
 })
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
   if (sidebarTimer.value) {
     clearTimeout(sidebarTimer.value)
+  }
+  if (debateCheckInterval) {
+    clearInterval(debateCheckInterval)
+    debateCheckInterval = null
   }
 })
 </script>
@@ -298,6 +499,22 @@ onUnmounted(() => {
 
 .sidebar-item.active::before {
   transform: scaleY(1);
+}
+
+.sidebar-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.sidebar-item.disabled:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.lock-icon {
+  font-size: 10px;
+  margin-top: 2px;
 }
 
 .sidebar-header {
@@ -383,14 +600,42 @@ onUnmounted(() => {
 
 /* 页面标题 */
 .page-header {
-  text-align: center;
   margin-bottom: 16px;
-  padding: 16px 0;
+  padding: 16px 20px;
   background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-light) 100%);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   position: relative;
   overflow: hidden;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.header-left {
+  flex: 1;
+  text-align: center;
+}
+
+.reset-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-white);
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-base);
+}
+
+.reset-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .page-header::before {
@@ -475,6 +720,23 @@ onUnmounted(() => {
   background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
   color: var(--text-white);
   box-shadow: var(--shadow-md);
+}
+
+.nav-tab.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.nav-tab.disabled:hover {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  transform: none;
+}
+
+.tab-lock {
+  font-size: 10px;
+  margin-left: 4px;
 }
 
 .tab-icon {

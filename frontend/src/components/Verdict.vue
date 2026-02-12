@@ -3,15 +3,33 @@
     <!-- 主标题 -->
     <div class="verdict-header">
       <h1 class="verdict-title">民事判决书</h1>
+      <el-button 
+        v-if="!loading && !verdictText" 
+        type="primary" 
+        @click="generateVerdict"
+        :loading="loading"
+      >
+        生成判决书
+      </el-button>
     </div>
 
-    <!-- 案件基本信息 -->
-    <div class="verdict-section">
-      <h2 class="section-title">案件基本信息</h2>
-      <div class="section-content">
-        {{ verdictInfo.basicInfo }}
-      </div>
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-section">
+      <ElIcon class="is-loading"><Loading /></ElIcon>
+      <p>正在生成判决书，请稍候...</p>
     </div>
+
+    <!-- 判决书内容 -->
+    <div v-else-if="verdictText" class="verdict-content">
+      <!-- 如果解析成功，显示结构化内容 -->
+      <template v-if="verdictInfo.basicInfo || verdictInfo.facts">
+        <!-- 案件基本信息 -->
+        <div v-if="verdictInfo.basicInfo" class="verdict-section">
+          <h2 class="section-title">案件基本信息</h2>
+          <div class="section-content">
+            {{ verdictInfo.basicInfo }}
+          </div>
+        </div>
 
     <!-- 审理经过 -->
     <div class="verdict-section">
@@ -59,62 +77,178 @@
       </div>
     </div>
 
-    <!-- 本院认为 -->
-    <div class="verdict-section">
-      <h2 class="section-title">本院认为</h2>
-      <div class="section-content">
-        <div class="content-item">
-          <h3 class="item-title">法律适用分析</h3>
-          <p>{{ verdictInfo.opinion.lawAnalysis }}</p>
+        <!-- 本院认为 -->
+        <div v-if="verdictInfo.opinion.lawAnalysis" class="verdict-section">
+          <h2 class="section-title">本院认为</h2>
+          <div class="section-content">
+            <div class="content-item">
+              <h3 class="item-title">法律适用分析</h3>
+              <p>{{ verdictInfo.opinion.lawAnalysis }}</p>
+            </div>
+            <div v-if="verdictInfo.opinion.legalJudgment" class="content-item">
+              <h3 class="item-title">对争议问题的法律判断</h3>
+              <p>{{ verdictInfo.opinion.legalJudgment }}</p>
+            </div>
+            <div v-if="verdictInfo.opinion.liability" class="content-item">
+              <h3 class="item-title">责任认定和理由</h3>
+              <p>{{ verdictInfo.opinion.liability }}</p>
+            </div>
+          </div>
         </div>
-        <div class="content-item">
-          <h3 class="item-title">对争议问题的法律判断</h3>
-          <p>{{ verdictInfo.opinion.legalJudgment }}</p>
-        </div>
-        <div class="content-item">
-          <h3 class="item-title">责任认定和理由</h3>
-          <p>{{ verdictInfo.opinion.liability }}</p>
+      </template>
+      
+      <!-- 如果解析失败，直接显示全文 -->
+      <div v-else class="verdict-section">
+        <div class="section-content" style="white-space: pre-line;">
+          {{ verdictText }}
         </div>
       </div>
+    </div>
+
+    <!-- 空状态 -->
+    <div v-else class="empty-section">
+      <p>点击"生成判决书"按钮生成判决书</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useCaseStore } from '@/stores/case'
+import request from '@/utils/request'
+import { ElMessage, ElButton, ElIcon } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 
-// 判决书内容（AI生成，暂时使用固定文字）
+const route = useRoute()
+const caseStore = useCaseStore()
+
+// 获取案件信息
+const caseDescription = ref(caseStore.caseDescription || route.query.description || '')
+const identity = ref(caseStore.selectedIdentity || route.query.identity || 'plaintiff')
+const messages = ref([]) // 庭审对话历史，从Debate组件获取
+
+// 判决书内容
 const verdictInfo = ref({
-  basicInfo: `原告：张三，男，1980年5月出生，住址：北京市朝阳区XX街道XX号。
-被告：李四，男，1975年8月出生，住址：北京市海淀区XX街道XX号。
-案由：技术服务合同纠纷
-案件编号：（2024）京0105民初12345号
-审理法院：北京市朝阳区人民法院
-审理时间：2024年3月15日`,
-
+  basicInfo: '',
   proceedings: {
-    filingTime: `原告于2024年1月20日向本院提起诉讼，称：2023年1月，原告与被告签订技术服务合同，约定被告向原告提供技术服务，合同金额50万元。原告已按约定支付首付款30万元，但被告未能按合同约定提供服务，构成违约。`,
-    process: `本院受理后，依法组成合议庭，于2024年3月15日公开开庭进行了审理。原告及其委托诉讼代理人、被告及其委托诉讼代理人到庭参加诉讼。本案现已审理终结。`,
-    disputes: `1. 被告是否存在违约行为；2. 原告的经济损失如何计算；3. 合同解除后的责任承担问题；4. 违约金是否过高需要调整。`
+    filingTime: '',
+    process: '',
+    disputes: ''
   },
-
   requests: {
-    plaintiff: `1. 判令被告返还已支付的服务费30万元；2. 判令被告支付违约金10万元；3. 判令被告承担本案诉讼费用。`,
-    defendant: `1. 对原告的诉讼请求不予认可；2. 认为原告未能提供必要的配合条件，导致无法正常履行合同；3. 认为原告主张的违约金过高，不符合法律规定；4. 请求法院驳回原告的诉讼请求。`,
-    mainIssues: `1. 合同履行过程中是否存在违约行为；2. 违约责任的承担方式；3. 违约金的计算标准和是否过高；4. 合同解除后的法律后果。`
+    plaintiff: '',
+    defendant: '',
+    mainIssues: ''
   },
-
-  facts: `经审理查明：2023年1月，原告与被告签订《技术服务合同》，约定被告向原告提供技术服务，合同金额为50万元。合同签订后，原告按约定于2023年1月15日支付了首付款30万元。但被告在收到首付款后，未能按合同约定的时间节点提供服务。原告多次催促，被告均以各种理由推脱。2023年3月，原告向被告发出解除合同通知，要求返还已支付款项并支付违约金。被告收到通知后，未予回应。
-
-上述事实，有双方签订的服务合同、银行转账凭证、沟通记录等证据在案佐证。`,
-
+  facts: '',
   opinion: {
-    lawAnalysis: `根据《中华人民共和国民法典》第五百七十七条规定，当事人一方不履行合同义务或者履行合同义务不符合约定的，应当承担继续履行、采取补救措施或者赔偿损失等违约责任。本案中，被告在收到首付款后，未能按合同约定提供服务，构成违约。`,
-    legalJudgment: `关于争议焦点一：被告是否存在违约行为。根据合同约定和证据材料，被告在收到首付款后，未能按约定时间提供服务，且经原告多次催促仍未履行，构成违约。
-
-关于争议焦点二：违约金的计算。合同约定的违约金为合同金额的20%，即10万元。根据《民法典》相关规定，约定的违约金过分高于造成的损失的，人民法院可以根据当事人的请求予以适当减少。但原告未能提供充分证据证明其实际损失，且违约金约定并未明显过高，本院予以支持。`,
-    liability: `被告未能按合同约定履行义务，构成违约，应当承担违约责任。原告要求被告返还已支付的服务费30万元，符合法律规定，本院予以支持。关于违约金，合同约定的10万元违约金在合理范围内，本院予以支持。`
+    lawAnalysis: '',
+    legalJudgment: '',
+    liability: ''
   }
+})
+
+const loading = ref(false)
+const verdictText = ref('')
+
+// 解析判决书文本
+const parseVerdict = (text) => {
+  // 尝试解析AI生成的判决书文本
+  // 如果AI返回的是结构化文本，尝试解析；否则直接显示
+  verdictText.value = text
+  
+  // 简单的文本解析逻辑（可以根据实际AI返回格式调整）
+  const lines = text.split('\n')
+  let currentSection = ''
+  let currentContent = []
+  
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    
+    // 识别章节
+    if (trimmed.includes('案件基本信息') || trimmed.includes('基本信息')) {
+      currentSection = 'basicInfo'
+      currentContent = []
+    } else if (trimmed.includes('审理经过')) {
+      if (currentSection === 'basicInfo') {
+        verdictInfo.value.basicInfo = currentContent.join('\n')
+      }
+      currentSection = 'proceedings'
+      currentContent = []
+    } else if (trimmed.includes('当事人诉讼请求') || trimmed.includes('诉讼请求')) {
+      if (currentSection === 'proceedings') {
+        verdictInfo.value.proceedings.filingTime = currentContent.join('\n')
+      }
+      currentSection = 'requests'
+      currentContent = []
+    } else if (trimmed.includes('本院查明') || trimmed.includes('查明的事实')) {
+      if (currentSection === 'requests') {
+        verdictInfo.value.requests.plaintiff = currentContent.join('\n')
+      }
+      currentSection = 'facts'
+      currentContent = []
+    } else if (trimmed.includes('本院认为')) {
+      if (currentSection === 'facts') {
+        verdictInfo.value.facts = currentContent.join('\n')
+      }
+      currentSection = 'opinion'
+      currentContent = []
+    } else {
+      currentContent.push(trimmed)
+    }
+  }
+  
+  // 保存最后一部分
+  if (currentSection === 'opinion' && currentContent.length > 0) {
+    verdictInfo.value.opinion.lawAnalysis = currentContent.join('\n')
+  } else if (currentSection === 'basicInfo' && currentContent.length > 0) {
+    verdictInfo.value.basicInfo = currentContent.join('\n')
+  }
+  
+  // 如果解析失败，直接显示全文
+  if (!verdictInfo.value.basicInfo && !verdictInfo.value.facts) {
+    verdictInfo.value.basicInfo = text
+  }
+}
+
+// 生成判决书
+const generateVerdict = async () => {
+  if (!caseDescription.value) {
+    ElMessage.warning('缺少案件描述信息')
+    return
+  }
+  
+  loading.value = true
+  
+  try {
+    // 尝试从localStorage或sessionStorage获取庭审对话历史
+    const debateMessages = JSON.parse(localStorage.getItem('debateMessages') || '[]')
+    
+    const response = await request.post('/debate/verdict', {
+      caseDescription: caseDescription.value,
+      messages: debateMessages,
+      identity: identity.value
+    })
+    
+    if (response.code === 200 && response.data) {
+      parseVerdict(response.data)
+      ElMessage.success('判决书生成成功')
+    } else {
+      throw new Error(response.message || '生成判决书失败')
+    }
+  } catch (error) {
+    console.error('生成判决书失败:', error)
+    ElMessage.error(error.response?.data?.message || error.message || '生成判决书失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 组件挂载时自动生成判决书
+onMounted(() => {
+  generateVerdict()
 })
 </script>
 
@@ -180,6 +314,27 @@ const verdictInfo = ref({
   margin: 0;
   padding-left: 15px;
   line-height: 1.8;
+}
+
+.loading-section {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.loading-section .el-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.empty-section {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.verdict-content {
+  margin-top: 16px;
 }
 </style>
 
