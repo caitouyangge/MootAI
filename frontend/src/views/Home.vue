@@ -41,11 +41,22 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
 const goToCourtroom = () => {
-  router.push({ name: 'courtroom' })
+  try {
+    // 跳转到子路由，确保子组件被加载
+    router.push({ name: 'courtroom-content' })
+      .catch(err => {
+        console.error('路由跳转失败:', err)
+        ElMessage.error('跳转失败，请重试')
+      })
+  } catch (error) {
+    console.error('跳转出错:', error)
+    ElMessage.error('跳转出错，请重试')
+  }
 }
 </script>
 

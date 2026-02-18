@@ -1,5 +1,9 @@
 <template>
-  <div class="courtroom-page" @mousemove="handleMouseMove" @mouseleave="handleMouseLeave">
+  <div 
+    class="courtroom-page" 
+    @mousemove="handleMouseMove" 
+    @mouseleave="handleMouseLeave"
+  >
     <!-- 左侧边栏 -->
     <div 
       class="sidebar" 
@@ -122,8 +126,18 @@
 
       <!-- 内容区域 -->
       <div class="content-area fade-in">
+        <!-- 错误提示 -->
+        <div v-if="componentError" class="error-message">
+          <div class="error-icon">⚠️</div>
+          <div class="error-content">
+            <div class="error-title">页面加载出错</div>
+            <div class="error-desc">{{ componentError }}</div>
+            <el-button type="primary" @click="window.location.reload()">刷新页面</el-button>
+          </div>
+        </div>
+        
         <!-- 阶段引导提示 -->
-        <div v-if="activeTab === 'pretrial'" class="stage-guide">
+        <div v-else-if="activeTab === 'pretrial'" class="stage-guide">
           <div class="guide-icon">📋</div>
           <div class="guide-content">
             <div class="guide-title">庭前准备阶段</div>
@@ -146,17 +160,17 @@
         </div>
         
         <PreTrial 
-          v-if="activeTab === 'pretrial'" 
+          v-if="!componentError && activeTab === 'pretrial'" 
           ref="preTrialRef"
           :active-sub-tab="pretrialSubTab"
           @update:active-sub-tab="pretrialSubTab = $event"
           @complete="completeStep('pretrial')"
         />
         <Debate 
-          v-else-if="activeTab === 'debate'" 
+          v-else-if="!componentError && activeTab === 'debate'" 
           @complete="completeStep('debate')"
         />
-        <Verdict v-else-if="activeTab === 'verdict'" />
+        <Verdict v-else-if="!componentError && activeTab === 'verdict'" />
       </div>
     </div>
     
@@ -174,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, onErrorCaptured } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -189,6 +203,15 @@ const caseStore = useCaseStore()
 const activeTab = ref('pretrial')
 const pretrialSubTab = ref('basic')
 const preTrialRef = ref(null)
+const componentError = ref(null)
+
+// 捕获子组件错误
+onErrorCaptured((err, instance, info) => {
+  console.error('捕获到组件错误:', err)
+  componentError.value = err.message || '组件渲染错误'
+  ElMessage.error('页面加载出错，请刷新页面重试')
+  return false
+})
 
 // 流程步骤定义
 const steps = [
@@ -443,7 +466,8 @@ onMounted(() => {
     // 定期检查辩论是否完成
     debateCheckInterval = setInterval(checkDebateComplete, 1000)
   } catch (e) {
-    console.error('Courtroom页面初始化失败:', e)
+    console.error('页面初始化失败:', e)
+    ElMessage.error('页面初始化失败，请刷新页面重试')
   }
 })
 
@@ -466,6 +490,10 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   position: relative;
   padding: 0;
+  /* 确保页面可见 */
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
 }
 
 /* 左侧边栏 */
@@ -871,6 +899,40 @@ onUnmounted(() => {
 .back-icon {
   font-size: 24px;
   font-weight: bold;
+}
+
+/* 错误提示 */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.error-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.error-content {
+  flex: 1;
+}
+
+.error-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #856404;
+  margin-bottom: 8px;
+}
+
+.error-desc {
+  font-size: 14px;
+  color: #856404;
+  margin-bottom: 12px;
 }
 
 /* 过渡动画 */

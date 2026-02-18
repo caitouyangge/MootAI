@@ -56,10 +56,18 @@
     <main class="main-content">
       <router-view v-slot="{ Component, route }">
         <transition 
-          :name="route.meta.transition || 'page'"
+          :name="route.meta?.transition || 'page'"
           mode="out-in"
         >
-          <component :is="Component" :key="route.path" />
+          <component 
+            v-if="Component"
+            :is="Component" 
+            :key="route.path"
+          />
+          <div v-else class="loading-placeholder">
+            <p>组件加载中...</p>
+            <el-button type="primary" @click="() => window.location.reload()">刷新页面</el-button>
+          </div>
         </transition>
       </router-view>
     </main>
@@ -309,6 +317,16 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.loading-placeholder {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.loading-placeholder p {
+  margin: 8px 0;
 }
 </style>
 

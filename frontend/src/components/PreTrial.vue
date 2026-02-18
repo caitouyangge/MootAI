@@ -67,10 +67,10 @@
           <div 
             class="upload-area" 
             @click="triggerUpload" 
-            @drop.prevent="handleDrop"
-            @dragover.prevent="isDragging = true"
-            @dragenter.prevent="isDragging = true"
-            @dragleave.prevent="isDragging = false"
+            @drop="handleDrop"
+            @dragover="handleDragOver"
+            @dragenter="handleDragEnter"
+            @dragleave="handleDragLeave"
             :class="{ 
               'has-files': fileList.length > 0,
               'dragging': isDragging
@@ -399,6 +399,7 @@ const fileList = ref(caseStore.fileList || [])
 const fileInput = ref(null)
 const isDragging = ref(false)
 const uploading = ref(false)
+const dragCounter = ref(0) // 用于跟踪拖拽进入/离开次数，避免子元素触发误判
 
 const triggerUpload = () => {
   fileInput.value?.click()
@@ -406,17 +407,51 @@ const triggerUpload = () => {
 
 const handleFileChange = async (event) => {
   const files = Array.from(event.target.files)
-  await addFiles(files)
+  if (files.length > 0) {
+    await addFiles(files)
+  }
   
   if (fileInput.value) {
     fileInput.value.value = ''
   }
 }
 
+const handleDragEnter = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  dragCounter.value++
+  if (event.dataTransfer?.items && event.dataTransfer.items.length > 0) {
+    isDragging.value = true
+  }
+}
+
+const handleDragLeave = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  dragCounter.value--
+  if (dragCounter.value === 0) {
+    isDragging.value = false
+  }
+}
+
+const handleDragOver = (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+}
+
 const handleDrop = async (event) => {
+  event.preventDefault()
+  event.stopPropagation()
   isDragging.value = false
+  dragCounter.value = 0
+  
   const files = Array.from(event.dataTransfer.files)
-  await addFiles(files)
+  if (files.length > 0) {
+    await addFiles(files)
+  }
 }
 
 const addFiles = async (files) => {
