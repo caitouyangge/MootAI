@@ -176,21 +176,37 @@
       
       <!-- 用户输入区域 -->
       <div v-if="debateStarted && !debateCompleted" class="input-section">
+        <!-- 发言状态提示 -->
+        <div class="speaking-status">
+          <div v-if="isGenerating" class="status-item status-generating">
+            <span class="status-icon">⏳</span>
+            <span class="status-text">{{ currentSpeakingRole }}正在发言中...</span>
+          </div>
+          <div v-else-if="isUserTurn" class="status-item status-user-turn">
+            <span class="status-icon">💬</span>
+            <span class="status-text">轮到您发言了（{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}）</span>
+          </div>
+          <div v-else class="status-item status-waiting">
+            <span class="status-icon">⏸️</span>
+            <span class="status-text">请等待{{ nextSpeakerName }}发言</span>
+          </div>
+        </div>
+        
         <div class="input-wrapper">
           <el-input
             v-model="userInput"
             type="textarea"
             :rows="3"
-            placeholder="请输入您的发言..."
+            :placeholder="isUserTurn ? `请输入您的发言（作为${userIdentity === 'plaintiff' ? '原告' : '被告'}）...` : '请等待其他角色发言...'"
             class="user-input"
-            :disabled="isGenerating"
+            :disabled="!isUserTurn || isGenerating"
             @keydown.ctrl.enter="sendMessage"
           />
           <div class="input-actions">
             <el-button
               type="primary"
               :loading="isGenerating"
-              :disabled="!userInput.trim() || isGenerating"
+              :disabled="!isUserTurn || !userInput.trim() || isGenerating"
               @click="sendMessage"
             >
               {{ isGenerating ? '生成中...' : '发送' }}
@@ -226,7 +242,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useCaseStore } from '@/stores/case'
@@ -278,6 +294,7 @@ const selectedJudgeType = ref('')
 const debateStarted = ref(false)
 const isGenerating = ref(false)
 const userInput = ref('')
+const currentSpeakingRole = ref('') // 当前正在发言的角色
 
 const onJudgeTypeChange = () => {
   // 法官类型改变时不做任何操作，等待用户点击"开始庭审"
@@ -332,15 +349,21 @@ const startDebate = async () => {
 
 // 发送用户消息
 const sendMessage = async () => {
-  if (!userInput.value.trim() || isGenerating.value) {
+  if (!userInput.value.trim() || isGenerating.value || !isUserTurn.value) {
     return
   }
   
   const userText = userInput.value.trim()
   userInput.value = ''
   
+  // 更新当前发言角色为用户
+  currentSpeakingRole.value = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  
   // 添加用户消息
   addMessage(userIdentity.value, userIdentity.value === 'plaintiff' ? '原告' : '被告', userText)
+  
+  // 用户发言结束
+  currentSpeakingRole.value = ''
   
   // 生成对方律师的回复
   const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
@@ -448,9 +471,21 @@ const checkJudgeShouldSpeak = async () => {
 const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
   // 检查发言中是否指定了下一个发言人
   if (judgeSpeech.includes('请原告') || judgeSpeech.includes('原告继续') || judgeSpeech.includes('原告发言')) {
-    await generateAiResponse('plaintiff', '', false)
+    // 如果用户是原告，轮到用户发言，不需要生成AI回复
+    if (userIdentity.value === 'plaintiff') {
+      return
+    } else {
+      // 用户是被告，下一个是原告（AI发言）
+      await generateAiResponse('plaintiff', '', false)
+    }
   } else if (judgeSpeech.includes('请被告') || judgeSpeech.includes('被告继续') || judgeSpeech.includes('被告发言')) {
-    await generateAiResponse('defendant', '', false)
+    // 如果用户是被告，轮到用户发言，不需要生成AI回复
+    if (userIdentity.value === 'defendant') {
+      return
+    } else {
+      // 用户是原告，下一个是被告（AI发言）
+      await generateAiResponse('defendant', '', false)
+    }
   } else {
     // 如果没有明确指定，根据对话历史决定
     await decideNextSpeaker()
@@ -471,10 +506,22 @@ const decideNextSpeaker = async () => {
     
     if (plaintiffMessages.length <= defendantMessages.length) {
       // 原告发言次数少，下一个是原告
-      await generateAiResponse('plaintiff', '', false)
+      if (userIdentity.value === 'plaintiff') {
+        // 轮到用户发言，不需要生成AI回复
+        return
+      } else {
+        // 用户是被告，下一个是原告（AI发言）
+        await generateAiResponse('plaintiff', '', false)
+      }
     } else {
       // 被告发言次数少，下一个是被告
-      await generateAiResponse('defendant', '', false)
+      if (userIdentity.value === 'defendant') {
+        // 轮到用户发言，不需要生成AI回复
+        return
+      } else {
+        // 用户是原告，下一个是被告（AI发言）
+        await generateAiResponse('defendant', '', false)
+      }
     }
   }
 }
@@ -485,16 +532,37 @@ const continueAlternatingDebate = async () => {
   const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
   
   if (!lastNonJudgeMessage) {
-    // 如果没有非法官消息，默认原告发言
-    await generateAiResponse('plaintiff', '', false)
-    return
+    // 如果没有非法官消息，判断下一个应该是谁
+    // 如果用户是原告，下一个应该是原告（用户发言）
+    if (userIdentity.value === 'plaintiff') {
+      // 轮到用户发言，不需要生成AI回复
+      return
+    } else {
+      // 用户是被告，下一个是原告（AI发言）
+      await generateAiResponse('plaintiff', '', false)
+      return
+    }
   }
   
   // 如果最后是原告发言，下一个是被告；反之亦然
   if (lastNonJudgeMessage.role === 'plaintiff') {
-    await generateAiResponse('defendant', '', false)
+    // 下一个是被告
+    if (userIdentity.value === 'defendant') {
+      // 轮到用户发言，不需要生成AI回复
+      return
+    } else {
+      // 用户是原告，下一个是被告（AI发言）
+      await generateAiResponse('defendant', '', false)
+    }
   } else {
-    await generateAiResponse('plaintiff', '', false)
+    // 下一个是原告
+    if (userIdentity.value === 'plaintiff') {
+      // 轮到用户发言，不需要生成AI回复
+      return
+    } else {
+      // 用户是被告，下一个是原告（AI发言）
+      await generateAiResponse('plaintiff', '', false)
+    }
   }
 }
 
@@ -503,6 +571,10 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
   if (isGenerating.value) return
   
   isGenerating.value = true
+  
+  // 更新当前发言角色
+  const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
+  currentSpeakingRole.value = roleName
   
   try {
     // 准备消息历史（包含当前prompt作为上下文）
@@ -558,6 +630,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
     ElMessage.error('生成失败，请重试: ' + (error.message || '未知错误'))
   } finally {
     isGenerating.value = false
+    currentSpeakingRole.value = '' // 发言结束，清空当前发言角色
   }
 }
 
@@ -583,6 +656,79 @@ const addMessage = (role, name, text) => {
     }
   })
 }
+
+// 判断是否轮到用户发言
+const isUserTurn = computed(() => {
+  if (!debateStarted.value || debateCompleted.value || isGenerating.value) {
+    return false
+  }
+  
+  // 获取最后一条消息
+  if (messages.value.length === 0) {
+    // 如果还没有消息，默认由法官开始，用户等待
+    return false
+  }
+  
+  const lastMessage = messages.value[messages.value.length - 1]
+  const lastRole = lastMessage.role
+  
+  // 如果最后是法官发言，需要判断法官是否指定了下一个发言人
+  if (lastRole === 'judge') {
+    const judgeText = lastMessage.text
+    // 检查法官是否指定了用户发言
+    if (userIdentity.value === 'plaintiff') {
+      return judgeText.includes('请原告') || judgeText.includes('原告继续') || judgeText.includes('原告发言')
+    } else {
+      return judgeText.includes('请被告') || judgeText.includes('被告继续') || judgeText.includes('被告发言')
+    }
+  }
+  
+  // 如果最后是对方发言，轮到用户发言
+  const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
+  if (lastRole === opponentRole) {
+    return true
+  }
+  
+  // 如果最后是用户自己发言，需要等待对方或法官
+  if (lastRole === userIdentity.value) {
+    return false
+  }
+  
+  return false
+})
+
+// 获取下一个发言人的名称
+const nextSpeakerName = computed(() => {
+  if (!debateStarted.value || messages.value.length === 0) {
+    return '法官'
+  }
+  
+  const lastMessage = messages.value[messages.value.length - 1]
+  const lastRole = lastMessage.role
+  
+  // 如果最后是法官发言，检查是否指定了下一个发言人
+  if (lastRole === 'judge') {
+    const judgeText = lastMessage.text
+    if (judgeText.includes('请原告') || judgeText.includes('原告继续') || judgeText.includes('原告发言')) {
+      return '原告'
+    } else if (judgeText.includes('请被告') || judgeText.includes('被告继续') || judgeText.includes('被告发言')) {
+      return '被告'
+    }
+  }
+  
+  // 如果最后是用户发言，下一个是对方
+  if (lastRole === userIdentity.value) {
+    return userIdentity.value === 'plaintiff' ? '被告' : '原告'
+  }
+  
+  // 如果最后是对方发言，下一个应该是用户
+  const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
+  if (lastRole === opponentRole) {
+    return userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  }
+  
+  return '法官'
+})
 
 // 生成判决结果
 const generateVerdict = () => {
@@ -1047,6 +1193,61 @@ onMounted(() => {
   margin-top: 15px;
   padding-top: 15px;
   border-top: 1px solid #e0e0e0;
+}
+
+/* 发言状态提示 */
+.speaking-status {
+  margin-bottom: 12px;
+  padding: 10px 15px;
+  border-radius: 6px;
+  background: #f5f7fa;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-icon {
+  font-size: 16px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-generating {
+  color: #e6a23c;
+}
+
+.status-generating .status-text {
+  color: #e6a23c;
+}
+
+.status-user-turn {
+  color: #409eff;
+}
+
+.status-user-turn .status-text {
+  color: #409eff;
+}
+
+.status-waiting {
+  color: #909399;
+}
+
+.status-waiting .status-text {
+  color: #909399;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .input-wrapper {
