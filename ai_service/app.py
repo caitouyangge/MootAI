@@ -29,10 +29,10 @@ logger = logging.getLogger(__name__)
 _model = None
 _model_lock = False
 
-# 外部AI API配置
-EXTERNAL_AI_API_KEY = "sk-aslsGiKSQWdlPmXad3StwEY1BEJFpjh4wAwLEWlxUltcNqfi"
-EXTERNAL_AI_BASE_URL = "https://chatapi.zjt66.top/v1"
-EXTERNAL_AI_MODEL = "gpt-4o-mini"
+# 外部AI API配置（支持环境变量覆盖）
+EXTERNAL_AI_API_KEY = os.getenv("EXTERNAL_AI_API_KEY", "sk-aslsGiKSQWdlPmXad3StwEY1BEJFpjh4wAwLEWlxUltcNqfi")
+EXTERNAL_AI_BASE_URL = os.getenv("EXTERNAL_AI_BASE_URL", "https://chatapi.zjt66.top/v1")
+EXTERNAL_AI_MODEL = os.getenv("EXTERNAL_AI_MODEL", "gpt-4o-mini")
 
 
 def resolve_model_path(adapter_dir: str) -> str:
@@ -143,6 +143,121 @@ def health():
         'status': 'ok',
         'model_loaded': _model is not None
     })
+
+
+@app.route('/api/diagnose/external-ai', methods=['GET'])
+def diagnose_external_ai():
+    """
+    诊断外部AI API连接
+    用于测试外部API是否可用
+    """
+    diagnosis = {
+        'external_api_url': EXTERNAL_AI_BASE_URL,
+        'external_api_model': EXTERNAL_AI_MODEL,
+        'api_key_configured': bool(EXTERNAL_AI_API_KEY),
+        'api_key_length': len(EXTERNAL_AI_API_KEY) if EXTERNAL_AI_API_KEY else 0,
+        'tests': []
+    }
+    
+    # 测试1: 基本连接测试
+    test1 = {
+        'name': '基本连接测试',
+        'status': 'unknown',
+        'details': {}
+    }
+    try:
+        import socket
+        from urllib.parse import urlparse
+        parsed = urlparse(EXTERNAL_AI_BASE_URL)
+        host = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        
+        if result == 0:
+            test1['status'] = 'success'
+            test1['details'] = {'message': f'可以连接到 {host}:{port}'}
+        else:
+            test1['status'] = 'failed'
+            test1['details'] = {'message': f'无法连接到 {host}:{port}', 'error_code': result}
+    except Exception as e:
+        test1['status'] = 'failed'
+        test1['details'] = {'message': '连接测试失败', 'error': str(e)}
+    
+    diagnosis['tests'].append(test1)
+    
+    # 测试2: HTTP请求测试
+    test2 = {
+        'name': 'HTTP请求测试',
+        'status': 'unknown',
+        'details': {}
+    }
+    try:
+        url = f"{EXTERNAL_AI_BASE_URL}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {EXTERNAL_AI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # 发送一个简单的测试请求
+        test_payload = {
+            "model": EXTERNAL_AI_MODEL,
+            "messages": [{"role": "user", "content": "test"}],
+            "max_tokens": 10
+        }
+        
+        response = requests.post(url, headers=headers, json=test_payload, timeout=10)
+        
+        test2['status'] = 'success' if response.status_code < 500 else 'failed'
+        test2['details'] = {
+            'http_status': response.status_code,
+            'response_headers': dict(response.headers),
+            'response_preview': response.text[:200] if response.text else None
+        }
+        
+        if response.status_code == 503:
+            test2['details']['message'] = '服务不可用 (503) - 外部API服务可能正在维护或过载'
+        elif response.status_code == 401:
+            test2['details']['message'] = '认证失败 (401) - API密钥可能无效'
+        elif response.status_code == 429:
+            test2['details']['message'] = '请求频率过高 (429) - 超过了速率限制'
+        elif response.status_code >= 500:
+            test2['details']['message'] = f'服务器错误 ({response.status_code})'
+        elif response.status_code == 200:
+            test2['details']['message'] = 'API可用，连接正常'
+        else:
+            test2['details']['message'] = f'HTTP状态码: {response.status_code}'
+            
+    except requests.exceptions.Timeout:
+        test2['status'] = 'failed'
+        test2['details'] = {'message': '请求超时 - 外部API响应时间过长'}
+    except requests.exceptions.ConnectionError as e:
+        test2['status'] = 'failed'
+        test2['details'] = {'message': '连接错误', 'error': str(e)}
+    except Exception as e:
+        test2['status'] = 'failed'
+        test2['details'] = {'message': '请求失败', 'error': str(e)}
+    
+    diagnosis['tests'].append(test2)
+    
+    # 计算总体状态
+    all_success = all(test['status'] == 'success' for test in diagnosis['tests'])
+    any_failed = any(test['status'] == 'failed' for test in diagnosis['tests'])
+    
+    if all_success:
+        diagnosis['overall_status'] = 'healthy'
+        diagnosis['message'] = '外部AI API连接正常'
+    elif any_failed:
+        diagnosis['overall_status'] = 'unhealthy'
+        diagnosis['message'] = '外部AI API连接存在问题，请查看详细测试结果'
+    else:
+        diagnosis['overall_status'] = 'unknown'
+        diagnosis['message'] = '无法确定外部AI API状态'
+    
+    return jsonify(diagnosis)
 
 
 @app.route('/api/generate', methods=['POST'])
@@ -591,49 +706,239 @@ def call_external_ai(prompt, system_prompt=None, max_tokens=2000):
     Returns:
         AI生成的文本
     """
-    try:
-        url = f"{EXTERNAL_AI_BASE_URL}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {EXTERNAL_AI_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        messages = []
-        if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt
-            })
+    url = f"{EXTERNAL_AI_BASE_URL}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {EXTERNAL_AI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    messages = []
+    if system_prompt:
         messages.append({
-            "role": "user",
-            "content": prompt
+            "role": "system",
+            "content": system_prompt
         })
-        
-        payload = {
-            "model": EXTERNAL_AI_MODEL,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": 0.7
-        }
-        
-        logger.info(f"调用外部AI API: {url}")
+    messages.append({
+        "role": "user",
+        "content": prompt
+    })
+    
+    payload = {
+        "model": EXTERNAL_AI_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.7
+    }
+    
+    # 记录请求详情
+    prompt_length = len(prompt)
+    system_prompt_length = len(system_prompt) if system_prompt else 0
+    total_messages_length = sum(len(str(msg.get("content", ""))) for msg in messages)
+    
+    logger.info("=" * 60)
+    logger.info("调用外部AI API - 请求详情")
+    logger.info("=" * 60)
+    logger.info(f"URL: {url}")
+    logger.info(f"模型: {EXTERNAL_AI_MODEL}")
+    logger.info(f"用户提示词长度: {prompt_length} 字符")
+    logger.info(f"系统提示词长度: {system_prompt_length} 字符")
+    logger.info(f"消息总数: {len(messages)}")
+    logger.info(f"总消息内容长度: {total_messages_length} 字符")
+    logger.info(f"最大token数: {max_tokens}")
+    logger.info(f"API密钥前缀: {EXTERNAL_AI_API_KEY[:10]}...{EXTERNAL_AI_API_KEY[-4:] if len(EXTERNAL_AI_API_KEY) > 14 else ''}")
+    
+    try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
+        
+        # 记录响应详情
+        status_code = response.status_code
+        response_headers = dict(response.headers)
+        
+        logger.info("=" * 60)
+        logger.info("外部AI API - 响应详情")
+        logger.info("=" * 60)
+        logger.info(f"HTTP状态码: {status_code}")
+        logger.info(f"响应头: {response_headers}")
+        
+        # 尝试读取和解析响应体
+        api_error_info = None
+        try:
+            response_text = response.text
+            response_length = len(response_text)
+            logger.info(f"响应体长度: {response_length} 字符")
+            
+            # 如果响应体不太长，记录完整内容；否则只记录前500字符
+            if response_length < 1000:
+                logger.info(f"响应体内容: {response_text}")
+            else:
+                logger.info(f"响应体预览（前500字符）: {response_text[:500]}...")
+            
+            # 尝试解析JSON
+            try:
+                response_json = response.json()
+                logger.info(f"响应JSON解析成功")
+                if "error" in response_json:
+                    api_error_info = response_json.get('error')
+                    if isinstance(api_error_info, dict):
+                        error_code = api_error_info.get('code', '')
+                        error_message = api_error_info.get('message', '')
+                        error_type = api_error_info.get('type', '')
+                        
+                        logger.error("=" * 60)
+                        logger.error("❌ API返回错误详情")
+                        logger.error("=" * 60)
+                        logger.error(f"错误代码: {error_code}")
+                        logger.error(f"错误类型: {error_type}")
+                        logger.error(f"错误消息: {error_message}")
+                        
+                        # 针对特定错误提供详细诊断
+                        if error_code == 'model_not_found':
+                            logger.error("")
+                            logger.error("🔍 模型未找到错误分析：")
+                            logger.error(f"  请求的模型: {EXTERNAL_AI_MODEL}")
+                            logger.error(f"  错误消息: {error_message}")
+                            logger.error("")
+                            logger.error("可能的原因和解决方案：")
+                            logger.error("1. 模型名称不正确")
+                            logger.error("   - 检查API服务商文档，确认正确的模型名称")
+                            logger.error("   - 可能需要的名称：gpt-4o-mini, gpt-4o-mini-2024-08-06, gpt-4o-mini-2024-07-18 等")
+                            logger.error("")
+                            logger.error("2. 模型在指定分组下不可用")
+                            logger.error("   - 错误消息提到'分组 default 下模型无可用渠道'")
+                            logger.error("   - 可能需要：")
+                            logger.error("     a) 使用不同的分组名称")
+                            logger.error("     b) 在API请求中指定分组参数")
+                            logger.error("     c) 联系API服务商配置模型渠道")
+                            logger.error("")
+                            logger.error("3. API密钥权限问题")
+                            logger.error("   - 当前API密钥可能没有权限使用该模型")
+                            logger.error("   - 检查API密钥对应的账户是否有该模型的访问权限")
+                            logger.error("   - 可能需要升级账户或购买模型访问权限")
+                            logger.error("")
+                            logger.error("4. 模型暂时不可用")
+                            logger.error("   - 该模型可能暂时下架或维护中")
+                            logger.error("   - 尝试使用其他可用的模型（如 gpt-3.5-turbo）")
+                            logger.error("=" * 60)
+                        elif error_code == 'invalid_api_key':
+                            logger.error("")
+                            logger.error("🔍 API密钥无效")
+                            logger.error("   - 检查API密钥是否正确")
+                            logger.error("   - 确认API密钥是否已过期")
+                            logger.error("   - 验证API密钥是否有权限访问该模型")
+                            logger.error("=" * 60)
+                        elif error_code == 'insufficient_quota':
+                            logger.error("")
+                            logger.error("🔍 配额不足")
+                            logger.error("   - 账户余额不足")
+                            logger.error("   - 需要充值或升级账户")
+                            logger.error("=" * 60)
+                    else:
+                        logger.error(f"API返回错误信息: {api_error_info}")
+            except:
+                logger.warning("响应体不是有效的JSON格式")
+        except Exception as e:
+            logger.warning(f"读取响应体失败: {e}")
+        
+        # 检查HTTP状态码
+        if status_code == 503:
+            logger.error("=" * 60)
+            logger.error("❌ 503 Service Unavailable - 服务不可用")
+            logger.error("=" * 60)
+            
+            # 如果API返回了具体的错误信息，优先显示
+            if api_error_info and isinstance(api_error_info, dict):
+                error_code = api_error_info.get('code', '')
+                if error_code == 'model_not_found':
+                    # model_not_found错误已经在上面详细处理了，这里只显示简要提示
+                    logger.error("注意：虽然HTTP状态码是503，但实际错误是模型未找到")
+                    logger.error("请查看上面的详细错误分析")
+                else:
+                    logger.error(f"API错误代码: {error_code}")
+                    logger.error(f"API错误消息: {api_error_info.get('message', '')}")
+            else:
+                logger.error("可能的原因：")
+                logger.error("1. 外部API服务正在维护或升级")
+                logger.error("2. 服务器过载，无法处理请求")
+                logger.error("3. 网络连接问题或DNS解析失败")
+                logger.error("4. API服务提供商临时故障")
+                logger.error("5. 请求频率过高，被限流")
+                logger.error("")
+                logger.error("诊断建议：")
+                logger.error("1. 检查外部API服务状态页面（如果有）")
+                logger.error("2. 使用curl或postman直接测试API端点")
+                logger.error("3. 检查网络连接和DNS解析")
+                logger.error("4. 等待一段时间后重试")
+                logger.error("5. 联系API服务提供商确认服务状态")
+            logger.error("=" * 60)
+        elif status_code == 401:
+            logger.error("❌ 401 Unauthorized - 认证失败")
+            logger.error("可能的原因：API密钥无效或过期")
+        elif status_code == 429:
+            logger.error("❌ 429 Too Many Requests - 请求频率过高")
+            logger.error("可能的原因：超过了API的速率限制")
+        elif status_code >= 500:
+            logger.error(f"❌ {status_code} Server Error - 服务器错误")
+            logger.error("可能的原因：外部API服务器内部错误")
+        
         response.raise_for_status()
         
         result = response.json()
         if "choices" in result and len(result["choices"]) > 0:
             content = result["choices"][0]["message"]["content"]
-            logger.info(f"外部AI API调用成功，生成了 {len(content)} 个字符")
+            logger.info(f"✅ 外部AI API调用成功，生成了 {len(content)} 个字符")
             return content
         else:
-            logger.error(f"外部AI API返回格式异常: {result}")
+            logger.error(f"❌ 外部AI API返回格式异常: {result}")
             raise ValueError("外部AI API返回格式异常")
     
+    except requests.exceptions.Timeout as e:
+        logger.error("=" * 60)
+        logger.error("❌ 请求超时")
+        logger.error("=" * 60)
+        logger.error(f"错误详情: {e}")
+        logger.error("可能的原因：")
+        logger.error("1. 网络连接慢或不稳定")
+        logger.error("2. 外部API响应时间过长")
+        logger.error("3. 请求内容过大，处理时间过长")
+        logger.error("=" * 60)
+        raise RuntimeError(f"调用外部AI API超时: {str(e)}")
+    
+    except requests.exceptions.ConnectionError as e:
+        logger.error("=" * 60)
+        logger.error("❌ 连接错误")
+        logger.error("=" * 60)
+        logger.error(f"错误详情: {e}")
+        logger.error("可能的原因：")
+        logger.error("1. 无法连接到外部API服务器")
+        logger.error("2. DNS解析失败")
+        logger.error("3. 防火墙或代理阻止连接")
+        logger.error("4. 外部API服务器已关闭")
+        logger.error("=" * 60)
+        raise RuntimeError(f"无法连接到外部AI API: {str(e)}")
+    
+    except requests.exceptions.HTTPError as e:
+        # HTTP错误已经在上面处理过了，这里只是重新抛出
+        logger.error(f"❌ HTTP错误: {e}")
+        raise RuntimeError(f"调用外部AI API失败: HTTP {response.status_code} - {str(e)}")
+    
     except requests.exceptions.RequestException as e:
-        logger.error(f"调用外部AI API失败: {e}")
+        logger.error("=" * 60)
+        logger.error("❌ 请求异常")
+        logger.error("=" * 60)
+        logger.error(f"错误类型: {type(e).__name__}")
+        logger.error(f"错误详情: {e}")
+        logger.error("=" * 60)
         raise RuntimeError(f"调用外部AI API失败: {str(e)}")
+    
     except Exception as e:
-        logger.error(f"处理外部AI API响应失败: {e}")
+        logger.error("=" * 60)
+        logger.error("❌ 处理外部AI API响应失败")
+        logger.error("=" * 60)
+        logger.error(f"错误类型: {type(e).__name__}")
+        logger.error(f"错误详情: {e}")
+        import traceback
+        logger.error(f"堆栈跟踪:\n{traceback.format_exc()}")
+        logger.error("=" * 60)
         raise RuntimeError(f"处理外部AI API响应失败: {str(e)}")
 
 

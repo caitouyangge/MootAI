@@ -174,6 +174,48 @@ def extract_final(text: str) -> Optional[str]:
     return None
 
 
+def remove_role_prefix(text: str, role: str = "") -> str:
+    """
+    去除文本开头的角色前缀
+    
+    Args:
+        text: 原始文本
+        role: 角色名称（如"审判员"、"原告"、"被告"），如果为空则尝试自动检测
+    
+    Returns:
+        去除角色前缀后的文本
+    """
+    if not text:
+        return text
+    
+    text = text.strip()
+    
+    # 如果提供了角色名称，优先使用
+    if role:
+        # 尝试去除 "{role}：" 或 "{role}:"
+        prefixes = [
+            f"{role}：",
+            f"{role}:",
+        ]
+        for prefix in prefixes:
+            if text.startswith(prefix):
+                return text[len(prefix):].strip()
+    
+    # 自动检测并去除角色前缀（支持常见角色）
+    common_roles = ["审判员", "公诉人", "辩护人", "原告", "被告"]
+    for role_name in common_roles:
+        prefixes = [
+            f"{role_name}：",
+            f"{role_name}:",
+        ]
+        for prefix in prefixes:
+            if text.startswith(prefix):
+                return text[len(prefix):].strip()
+    
+    # 如果没有匹配到，返回原文本
+    return text
+
+
 def generate_with_retries(
     model,
     tokenizer,
@@ -198,10 +240,13 @@ def generate_with_retries(
     # 尝试提取 <final> 标签中的内容
     final = extract_final(ans)
     if final:
-        return final
+        # 去除角色前缀（因为系统提示词要求输出时包含角色前缀，但前端会自己添加）
+        cleaned = remove_role_prefix(final, assistant_role)
+        return cleaned
     
-    # 如果没有 final 标签，直接返回原始输出
-    return ans
+    # 如果没有 final 标签，尝试去除角色前缀后返回原始输出
+    cleaned = remove_role_prefix(ans, assistant_role)
+    return cleaned
 
 
 def generate_one(
