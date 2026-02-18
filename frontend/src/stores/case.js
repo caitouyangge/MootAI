@@ -17,6 +17,12 @@ export const useCaseStore = defineStore('case', () => {
   // 案件ID
   const caseId = ref(null)
   
+  // 法官类型
+  const selectedJudgeType = ref('')
+  
+  // 对方AI律师的辩论策略
+  const opponentStrategy = ref('')
+  
   // 设置身份
   const setIdentity = (identity) => {
     selectedIdentity.value = identity
@@ -47,6 +53,16 @@ export const useCaseStore = defineStore('case', () => {
     caseDescription.value = description
   }
   
+  // 设置法官类型
+  const setJudgeType = (judgeType) => {
+    selectedJudgeType.value = judgeType
+  }
+  
+  // 设置对方AI律师的辩论策略
+  const setOpponentStrategy = (strategy) => {
+    opponentStrategy.value = strategy
+  }
+  
   // 重置所有状态
   const reset = () => {
     selectedIdentity.value = ''
@@ -54,6 +70,8 @@ export const useCaseStore = defineStore('case', () => {
     filesConfirmed.value = false
     caseDescription.value = ''
     caseId.value = null
+    selectedJudgeType.value = ''
+    opponentStrategy.value = ''
   }
   
   return {
@@ -62,12 +80,16 @@ export const useCaseStore = defineStore('case', () => {
     filesConfirmed,
     caseDescription,
     caseId,
+    selectedJudgeType,
+    opponentStrategy,
     setIdentity,
     setFileList,
     confirmFiles,
     resetConfirm,
     setCaseDescription,
     setCaseId,
+    setJudgeType,
+    setOpponentStrategy,
     reset
   }
 })

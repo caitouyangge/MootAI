@@ -168,13 +168,85 @@
         </div>
       </div>
 
+      <!-- 步骤4：选择法官类型 -->
+      <div v-else-if="currentStep === 'judge'" class="step-content">
+        <div class="step-header">
+          <h3 class="step-title">步骤4：选择法官类型</h3>
+          <p class="step-desc">请选择本次模拟庭审的法官类型</p>
+        </div>
+        <div class="judge-select-section">
+          <el-select
+            v-model="selectedJudgeType"
+            placeholder="请选择法官类型"
+            class="judge-select"
+            @change="onJudgeTypeChange"
+          >
+            <el-option
+              v-for="judge in judgeTypes"
+              :key="judge.value"
+              :label="judge.label"
+              :value="judge.value"
+            >
+              <div class="judge-option">
+                <span class="judge-name">{{ judge.label }}</span>
+                <span class="judge-desc">：{{ judge.description }}</span>
+              </div>
+            </el-option>
+          </el-select>
+          <div v-if="selectedJudgeType" class="judge-preview">
+            <div class="preview-title">已选择：{{ getJudgeLabel(selectedJudgeType) }}</div>
+            <div class="preview-desc">{{ getJudgeDescription(selectedJudgeType) }}</div>
+          </div>
+        </div>
+        <div v-if="selectedJudgeType" class="step-actions">
+          <el-button type="primary" @click="completeStep('judge')">
+            确认并继续
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 步骤5：选择对方AI律师的辩论策略 -->
+      <div v-else-if="currentStep === 'strategy'" class="step-content">
+        <div class="step-header">
+          <h3 class="step-title">步骤5：选择对方AI律师的辩论策略</h3>
+          <p class="step-desc">请选择对方AI律师在庭审中的辩论策略</p>
+        </div>
+        <div class="strategy-select-section">
+          <div class="strategy-options">
+            <div
+              v-for="strategy in strategyOptions"
+              :key="strategy.value"
+              class="strategy-option"
+              :class="{ 'active': selectedOpponentStrategy === strategy.value }"
+              @click="selectStrategy(strategy.value)"
+            >
+              <div class="strategy-option-header">
+                <div class="strategy-icon">{{ strategy.icon }}</div>
+                <div class="strategy-title">{{ strategy.label }}</div>
+              </div>
+              <div class="strategy-description">{{ strategy.description }}</div>
+              <div class="strategy-features">
+                <div v-for="feature in strategy.features" :key="feature" class="strategy-feature">
+                  • {{ feature }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="selectedOpponentStrategy" class="step-actions">
+          <el-button type="primary" @click="completeStep('strategy')">
+            确认并继续
+          </el-button>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue'
-import { ElMessage, ElButton, ElInput } from 'element-plus'
+import { ElMessage, ElButton, ElInput, ElSelect, ElOption } from 'element-plus'
 import { useCaseStore } from '@/stores/case'
 import request from '@/utils/request'
 
@@ -186,7 +258,9 @@ const caseStore = useCaseStore()
 const steps = [
   { key: 'identity', label: '选择身份' },
   { key: 'upload', label: '上传资料' },
-  { key: 'description', label: '生成描述' }
+  { key: 'description', label: '生成描述' },
+  { key: 'judge', label: '选择法官' },
+  { key: 'strategy', label: '选择策略' }
 ]
 
 // 当前步骤
@@ -196,7 +270,7 @@ const currentStep = ref('identity')
 const getStepStatus = () => {
   try {
     if (typeof localStorage === 'undefined') {
-      return { identity: false, upload: false, description: false }
+      return { identity: false, upload: false, description: false, judge: false, strategy: false }
     }
     const status = localStorage.getItem('pretrialStepStatus')
     if (status) {
@@ -205,11 +279,18 @@ const getStepStatus = () => {
       if (parsed.info !== undefined) {
         delete parsed.info
       }
-      return parsed
+      // 确保包含所有步骤
+      return {
+        identity: parsed.identity || false,
+        upload: parsed.upload || false,
+        description: parsed.description || false,
+        judge: parsed.judge || false,
+        strategy: parsed.strategy || false
+      }
     }
-    return { identity: false, upload: false, description: false }
+    return { identity: false, upload: false, description: false, judge: false, strategy: false }
   } catch {
-    return { identity: false, upload: false, description: false }
+    return { identity: false, upload: false, description: false, judge: false, strategy: false }
   }
 }
 
@@ -252,8 +333,8 @@ const completeStep = async (stepKey) => {
   stepStatus.value[stepKey] = true
   saveStepStatus()
   
-  // 如果是完成步骤3（生成描述），直接完成整个流程
-  if (stepKey === 'description') {
+  // 如果是完成最后一步（选择策略），直接完成整个流程
+  if (stepKey === 'strategy') {
     // 所有步骤完成，保存案件信息并触发完成事件
     await saveCase()
     emit('complete')
@@ -279,7 +360,7 @@ const completeStep = async (stepKey) => {
 
 // 保存案件信息
 const saveCase = async () => {
-  if (!selectedIdentity.value || fileList.value.length === 0 || !caseDescription.value) {
+  if (!selectedIdentity.value || fileList.value.length === 0 || !caseDescription.value || !selectedJudgeType.value || !selectedOpponentStrategy.value) {
     return
   }
   
@@ -288,7 +369,9 @@ const saveCase = async () => {
     const response = await request.post('/cases', {
       identity: selectedIdentity.value,
       fileNames: fileNames,
-      caseDescription: caseDescription.value
+      caseDescription: caseDescription.value,
+      judgeType: selectedJudgeType.value,
+      opponentStrategy: selectedOpponentStrategy.value
     })
     
     if (response.code === 200) {
@@ -554,6 +637,110 @@ watch(caseDescription, (newVal) => {
   }
 })
 
+// 法官类型
+const judgeTypes = ref([
+  {
+    value: 'professional',
+    label: '专业型',
+    description: '讲话简洁，业务熟练，判决果断'
+  },
+  {
+    value: 'strong',
+    label: '强势型',
+    description: '专业能力出众，细节能力强'
+  },
+  {
+    value: 'partial-plaintiff',
+    label: '偏袒型（原告）',
+    description: '习惯对原告宽容'
+  },
+  {
+    value: 'partial-defendant',
+    label: '偏袒型（被告）',
+    description: '习惯对被告宽容'
+  },
+  {
+    value: 'neutral',
+    label: '中立型',
+    description: '保持中立，注重程序公正'
+  }
+])
+
+const selectedJudgeType = ref(caseStore.selectedJudgeType || '')
+
+const onJudgeTypeChange = () => {
+  caseStore.setJudgeType(selectedJudgeType.value)
+}
+
+const getJudgeLabel = (value) => {
+  const judge = judgeTypes.value.find(j => j.value === value)
+  return judge ? judge.label : ''
+}
+
+const getJudgeDescription = (value) => {
+  const judge = judgeTypes.value.find(j => j.value === value)
+  return judge ? judge.description : ''
+}
+
+// 对方AI律师的辩论策略
+const strategyOptions = ref([
+  {
+    value: 'aggressive',
+    label: '激进策略',
+    icon: '⚔️',
+    description: '采取强硬立场，积极进攻，不轻易让步',
+    features: [
+      '主动质疑对方证据',
+      '强调己方优势',
+      '对争议点进行深入辩论',
+      '较少妥协'
+    ]
+  },
+  {
+    value: 'conservative',
+    label: '保守策略',
+    icon: '🛡️',
+    description: '优先考虑调解，主张温和，可适当让步',
+    features: [
+      '优先考虑调解解决',
+      '主张较为温和',
+      '可适当让步',
+      '避免过度激化矛盾'
+    ]
+  },
+  {
+    value: 'balanced',
+    label: '均衡策略',
+    icon: '⚖️',
+    description: '平衡攻守，主张适中，可协商',
+    features: [
+      '主张适中',
+      '准备充分证据',
+      '不过度激化矛盾',
+      '保持协商空间'
+    ]
+  },
+  {
+    value: 'defensive',
+    label: '防御策略',
+    icon: '🛡️',
+    description: '重点防守，回应对方质疑，保护己方利益',
+    features: [
+      '重点回应对方质疑',
+      '保护己方核心利益',
+      '谨慎应对争议点',
+      '避免主动进攻'
+    ]
+  }
+])
+
+const selectedOpponentStrategy = ref(caseStore.opponentStrategy || '')
+
+const selectStrategy = (strategy) => {
+  selectedOpponentStrategy.value = strategy
+  caseStore.setOpponentStrategy(strategy)
+}
+
 // 组件挂载时，根据实际完成情况跳转到正确的步骤
 onMounted(() => {
   // 检查每个步骤是否真正完成（不仅仅是可访问）
@@ -566,6 +753,12 @@ onMounted(() => {
   // 3. description 步骤：检查是否有案件描述
   const hasDescription = caseDescription.value && caseDescription.value.trim() !== ''
   
+  // 4. judge 步骤：检查是否选择了法官类型
+  const hasJudge = selectedJudgeType.value && selectedJudgeType.value !== ''
+  
+  // 5. strategy 步骤：检查是否选择了策略
+  const hasStrategy = selectedOpponentStrategy.value && selectedOpponentStrategy.value !== ''
+  
   // 根据实际完成情况决定显示哪个步骤
   if (!hasIdentity) {
     // 如果还没有选择身份，显示身份选择页面
@@ -576,6 +769,12 @@ onMounted(() => {
   } else if (!hasDescription) {
     // 如果还没有生成描述，显示描述生成页面
     currentStep.value = 'description'
+  } else if (!hasJudge) {
+    // 如果还没有选择法官类型，显示法官选择页面
+    currentStep.value = 'judge'
+  } else if (!hasStrategy) {
+    // 如果还没有选择策略，显示策略选择页面
+    currentStep.value = 'strategy'
   } else {
     // 所有步骤都完成了，显示最后一步
     currentStep.value = steps[steps.length - 1].key
@@ -1047,5 +1246,134 @@ onMounted(() => {
   color: #606266;
   line-height: 1.6;
   white-space: pre-line;
+}
+
+/* 法官类型选择 */
+.judge-select-section {
+  margin: 20px 0;
+}
+
+.judge-select {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+:deep(.judge-select .el-input__inner) {
+  height: 48px;
+  font-size: 16px;
+}
+
+:deep(.judge-select .el-select-dropdown__item) {
+  padding: 12px 20px;
+}
+
+.judge-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.judge-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.judge-desc {
+  color: #666;
+  font-size: 14px;
+}
+
+.judge-preview {
+  padding: 16px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.preview-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #409eff;
+  margin-bottom: 8px;
+}
+
+.preview-desc {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 策略选择 */
+.strategy-select-section {
+  margin: 20px 0;
+}
+
+.strategy-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.strategy-option {
+  padding: 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: white;
+}
+
+.strategy-option:hover {
+  border-color: #409eff;
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+}
+
+.strategy-option.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+}
+
+.strategy-option-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.strategy-icon {
+  font-size: 32px;
+}
+
+.strategy-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.strategy-description {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.strategy-features {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.strategy-feature {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.strategy-feature:last-child {
+  margin-bottom: 0;
 }
 </style>

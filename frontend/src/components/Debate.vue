@@ -1,5 +1,13 @@
 <template>
   <div class="debate-container">
+    <!-- 身份信息显示 -->
+    <div class="identity-display-section">
+      <h3 class="section-title">身份</h3>
+      <div class="identity-info">
+        <span class="identity-label">{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}</span>
+      </div>
+    </div>
+
     <!-- 庭前准备材料查看 -->
     <div class="pretrial-materials-section">
       <div class="materials-header">
@@ -15,10 +23,6 @@
       </div>
       <el-collapse-transition>
         <div v-show="showMaterials" class="materials-content">
-          <div class="material-item">
-            <div class="material-label">身份：</div>
-            <div class="material-value">{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}</div>
-          </div>
           <div class="material-item" v-if="fileList.length > 0">
             <div class="material-label">上传文件：</div>
             <div class="material-value">
@@ -36,41 +40,21 @@
       </el-collapse-transition>
     </div>
 
-    <!-- 法官类型选择 -->
-    <div class="judge-select-section">
-      <h3 class="section-title">选择法官类型</h3>
-      <el-select
-        v-model="selectedJudgeType"
-        placeholder="请选择法官类型"
-        class="judge-select"
-        @change="onJudgeTypeChange"
-      >
-        <el-option
-          v-for="judge in judgeTypes"
-          :key="judge.value"
-          :label="judge.label"
-          :value="judge.value"
-        >
-          <div class="judge-option">
-            <span class="judge-name">{{ judge.label }}</span>
-            <span class="judge-desc">：{{ judge.description }}</span>
-          </div>
-        </el-option>
-      </el-select>
+    <!-- 法官类型显示 -->
+    <div class="judge-display-section">
+      <h3 class="section-title">法官类型</h3>
+      <div class="judge-info">
+        <span class="judge-label">{{ getJudgeLabel(selectedJudgeType) }}</span>
+        <span class="judge-desc">{{ getJudgeDescription(selectedJudgeType) }}</span>
+      </div>
     </div>
 
-    <!-- 诉讼策略显示 -->
+    <!-- 对方AI律师策略显示 -->
     <div class="strategy-display-section">
-      <h3 class="section-title">诉讼策略</h3>
-      <div class="strategy-cards">
-        <div class="strategy-card plaintiff-strategy">
-          <div class="strategy-label">原告策略</div>
-          <div class="strategy-content">{{ plaintiffStrategy }}</div>
-        </div>
-        <div class="strategy-card defendant-strategy">
-          <div class="strategy-label">被告策略</div>
-          <div class="strategy-content">{{ defendantStrategy }}</div>
-        </div>
+      <h3 class="section-title">对方AI律师策略</h3>
+      <div class="strategy-card" :class="userIdentity === 'plaintiff' ? 'defendant-strategy' : 'plaintiff-strategy'">
+        <div class="strategy-label">{{ userIdentity === 'plaintiff' ? '被告' : '原告' }}策略</div>
+        <div class="strategy-content">{{ userIdentity === 'plaintiff' ? defendantStrategy : plaintiffStrategy }}</div>
       </div>
     </div>
 
@@ -79,7 +63,7 @@
       <h3 class="section-title">庭审现场</h3>
       <div class="chat-container" ref="chatContainer">
         <div v-if="messages.length === 0" class="empty-tip">
-          <p>请先选择法官类型，然后点击"开始庭审"按钮</p>
+          <p>请点击"开始庭审"按钮开始模拟法庭辩论</p>
         </div>
         <div
           v-for="(message, index) in messages"
@@ -223,11 +207,14 @@
         type="primary"
         size="large"
         class="start-btn"
-        :disabled="!selectedJudgeType"
+        :disabled="!selectedJudgeType || !opponentStrategy"
         @click="startDebate"
       >
         开始庭审
       </el-button>
+      <p v-if="!debateStarted && (!selectedJudgeType || !opponentStrategy)" class="start-hint">
+        请先在庭前准备阶段完成法官类型和策略选择
+      </p>
       <el-button
         v-if="debateCompleted"
         type="primary"
@@ -261,7 +248,7 @@ const caseDescription = ref(caseStore.caseDescription || '')
 const fileList = ref(caseStore.fileList || [])
 const showMaterials = ref(false)
 
-// 法官类型
+// 法官类型（从store读取）
 const judgeTypes = ref([
   {
     value: 'professional',
@@ -290,19 +277,60 @@ const judgeTypes = ref([
   }
 ])
 
-const selectedJudgeType = ref('')
+const selectedJudgeType = ref(caseStore.selectedJudgeType || 'neutral')
 const debateStarted = ref(false)
 const isGenerating = ref(false)
 const userInput = ref('')
 const currentSpeakingRole = ref('') // 当前正在发言的角色
 
-const onJudgeTypeChange = () => {
-  // 法官类型改变时不做任何操作，等待用户点击"开始庭审"
+const getJudgeLabel = (value) => {
+  const judge = judgeTypes.value.find(j => j.value === value)
+  return judge ? judge.label : '未选择'
 }
 
-// 诉讼策略
-const plaintiffStrategy = ref('均衡策略：主张返还已支付款项30万元，违约金主张适中，约5-7万元，可协商。准备充分的证据，但不过度激化矛盾。')
-const defendantStrategy = ref('保守策略：优先考虑通过调解解决争议，主张返还已支付款项，但可适当让步。违约金主张较为温和，可协商调整。')
+const getJudgeDescription = (value) => {
+  const judge = judgeTypes.value.find(j => j.value === value)
+  return judge ? judge.description : ''
+}
+
+// 策略选项定义
+const strategyDefinitions = {
+  aggressive: '激进策略：采取强硬立场，积极进攻，不轻易让步。主动质疑对方证据，强调己方优势，对争议点进行深入辩论。',
+  conservative: '保守策略：优先考虑通过调解解决争议，主张较为温和，可适当让步。避免过度激化矛盾，保持协商空间。',
+  balanced: '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。',
+  defensive: '防御策略：重点防守，回应对方质疑，保护己方核心利益。谨慎应对争议点，避免主动进攻。'
+}
+
+// 诉讼策略（根据用户身份和对方策略设置）
+const opponentStrategy = ref(caseStore.opponentStrategy || 'balanced')
+const plaintiffStrategy = ref('')
+const defendantStrategy = ref('')
+
+// 根据用户身份和对方策略初始化策略
+const initStrategies = () => {
+  if (userIdentity.value === 'plaintiff') {
+    // 用户是原告，对方是被告
+    defendantStrategy.value = strategyDefinitions[opponentStrategy.value] || strategyDefinitions.balanced
+    plaintiffStrategy.value = '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。'
+  } else {
+    // 用户是被告，对方是原告
+    plaintiffStrategy.value = strategyDefinitions[opponentStrategy.value] || strategyDefinitions.balanced
+    defendantStrategy.value = '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。'
+  }
+}
+
+// 初始化策略
+initStrategies()
+
+// 监听用户身份变化，重新初始化策略
+watch(userIdentity, () => {
+  initStrategies()
+})
+
+// 监听对方策略变化，重新初始化策略
+watch(opponentStrategy, () => {
+  initStrategies()
+})
 
 // 对话消息
 const messages = ref([])
@@ -333,7 +361,12 @@ const saveEdit = (index) => {
 // 开始庭审
 const startDebate = async () => {
   if (!selectedJudgeType.value) {
-    ElMessage.warning('请先选择法官类型')
+    ElMessage.warning('请先在庭前准备阶段选择法官类型')
+    return
+  }
+  
+  if (!opponentStrategy.value) {
+    ElMessage.warning('请先在庭前准备阶段选择对方AI律师的辩论策略')
     return
   }
   
@@ -763,6 +796,30 @@ onMounted(() => {
   border-bottom: 2px solid #f0f0f0;
 }
 
+/* 身份信息显示 */
+.identity-display-section {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.identity-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.identity-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #409eff;
+  padding: 8px 16px;
+  background: white;
+  border-radius: 6px;
+  border-left: 4px solid #409eff;
+}
+
 /* 庭前准备材料查看 */
 .pretrial-materials-section {
   background: #f5f7fa;
@@ -840,46 +897,27 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* 法官类型选择 */
-.judge-select-section {
+/* 法官类型显示 */
+.judge-display-section {
   background: #f5f7fa;
   border-radius: 8px;
   padding: 15px;
 }
 
-.judge-select {
-  width: 100%;
-}
-
-/* 选择器输入框字体大小 */
-:deep(.judge-select .el-input__inner) {
-  font-size: 12px;
-  height: 28px;
-  line-height: 28px;
-}
-
-/* 选择器下拉选项字体大小 */
-:deep(.judge-select .el-select-dropdown__item) {
-  font-size: 12px;
-  height: auto;
-  padding: 6px 12px;
-}
-
-.judge-option {
+.judge-info {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.judge-name {
+.judge-label {
+  font-size: 16px;
   font-weight: 600;
-  color: #333;
-  font-size: 12px;
+  color: #409eff;
 }
 
 .judge-desc {
-  font-size: 12px;
+  font-size: 14px;
   color: #666;
 }
 
@@ -890,13 +928,7 @@ onMounted(() => {
   padding: 15px;
 }
 
-.strategy-cards {
-  display: flex;
-  gap: 15px;
-}
-
 .strategy-card {
-  flex: 1;
   background: white;
   border-radius: 6px;
   padding: 15px;
@@ -1296,6 +1328,13 @@ onMounted(() => {
   background: #c0c4cc;
   border-color: #c0c4cc;
   cursor: not-allowed;
+}
+
+.start-hint {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #e6a23c;
+  text-align: center;
 }
 
 .generate-btn {
