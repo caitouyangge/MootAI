@@ -18,9 +18,58 @@ import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    AutoConfig,
     BitsAndBytesConfig,
 )
 from peft import PeftModel
+
+# 设置 Hugging Face 镜像站点（解决网络连接问题）
+def setup_hf_mirror():
+    """设置 Hugging Face 镜像站点，解决网络连接问题"""
+    # 检查是否已设置环境变量
+    if "HF_ENDPOINT" not in os.environ:
+        # 使用国内镜像站点
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        print("[信息] 已设置 Hugging Face 镜像站点: https://hf-mirror.com")
+        print("[提示] 如果仍有网络问题，可以手动设置环境变量: set HF_ENDPOINT=https://hf-mirror.com")
+    else:
+        print(f"[信息] 使用已设置的 Hugging Face 端点: {os.environ.get('HF_ENDPOINT')}")
+
+# 在导入后立即设置镜像
+setup_hf_mirror()
+
+# 修复 transformers 库中 quantization_config 为 None 时的序列化错误
+def _patch_quantization_config():
+    """修复 transformers 配置类中 quantization_config 为 None 时的序列化错误"""
+    try:
+        from transformers.configuration_utils import PretrainedConfig
+        
+        # 保存原始的 to_dict 方法
+        original_to_dict = PretrainedConfig.to_dict
+        
+        def patched_to_dict(self, *args, **kwargs):
+            # 在调用原始方法之前，检查并修复 quantization_config
+            if hasattr(self, 'quantization_config') and self.quantization_config is None:
+                # 临时删除 None 的 quantization_config 以避免序列化错误
+                delattr(self, 'quantization_config')
+                try:
+                    result = original_to_dict(self, *args, **kwargs)
+                finally:
+                    # 不需要恢复，因为它是 None
+                    pass
+                return result
+            else:
+                return original_to_dict(self, *args, **kwargs)
+        
+        # 应用补丁
+        PretrainedConfig.to_dict = patched_to_dict
+        return True
+    except Exception as e:
+        print(f"[警告] 无法应用 quantization_config 补丁: {e}")
+        return False
+
+# 在导入后立即应用补丁
+_patch_quantization_config()
 
 
 def _load_base_model_name(adapter_dir: str, override: Optional[str]) -> str:
@@ -78,16 +127,22 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
 
 def add_no_thought_constraint(system_prompt: str, assistant_role: str = "") -> str:
     role_line = f"\n\n你始终扮演：{assistant_role}。" if assistant_role else ""
+    role_prefix = f"{assistant_role}：" if assistant_role else "公诉人："
     return (
         system_prompt.strip()
         + role_line
-        + "\n\n【输出要求（必须遵守）】\n"
-        + "1) 只输出你在法庭上的“最终发言”，不要输出思考过程、分析过程、计划、旁白、元叙述。\n"
-        + "2) 不要出现类似“我现在需要/首先/接下来/让我/我将/我应该/切换角色/回顾对话历史”等描述过程的话。\n"
+        + "\n\n【输出要求（必须严格遵守）】\n"
+        + "1) 只输出你在法庭上的\"最终发言\"，绝对不要输出思考过程、分析过程、计划、旁白、元叙述。\n"
+        + "2) 禁止出现以下任何内容：\n"
+        + "   - 思考过程（如\"我需要\"、\"我将\"、\"我应该\"、\"首先\"、\"接下来\"）\n"
+        + "   - 计划或列表（如\"1. 语气要...\"、\"2. 包含以下要素\"）\n"
+        + "   - 元叙述（如\"给出一份符合要求的发言\"、\"构建一段\"）\n"
+        + "   - 自述性语言（如\"让我\"、\"我现在需要\"、\"请根据以上要求\"）\n"
         + "3) 直接进入陈述或反驳，语言风格贴合法庭发言。\n"
-        + "4) 必须以“{角色}：”开头输出（例如“公诉人：...”/“辩护人：...”），且不要在开头自述你在做什么。\n"
-        + "5) 只写最终发言内容，不要写‘我将…/我需要…/我应该…’这类过程句。"
-        + "\n6) 输出格式必须为：<final>你的最终发言</final>。除了 <final>...</final> 之外不要输出任何内容。"
+        + f"4) 必须以\"{role_prefix}\"开头输出，且不要在开头自述你在做什么。\n"
+        + "5) 只写最终发言内容，不要写任何过程性、计划性、分析性的文字。\n"
+        + f"6) 输出格式必须为：<final>{role_prefix}你的最终发言内容</final>。除了 <final>...</final> 标签内的内容外，不要输出任何其他文字。\n"
+        + "7) 如果输出不符合要求，系统会自动重试，请确保每次输出都是最终发言，不要包含任何思考过程。"
     )
 
 
@@ -110,25 +165,6 @@ def load_case_file(path: str) -> Dict[str, Any]:
         raise RuntimeError(f"加载案件文件失败: {e}")
 
 
-def looks_like_thought(text: str) -> bool:
-    t = text.strip()
-    bad_markers = [
-        "我现在需要",
-        "我需要切换",
-        "切换到",
-        "首先",
-        "接下来",
-        "让我",
-        "我将",
-        "我应该",
-        "回顾对话历史",
-        "确保在新的角色下",
-        "语言风格",
-        "辩论的逻辑顺序",
-    ]
-    return any(m in t for m in bad_markers)
-
-
 def extract_final(text: str) -> Optional[str]:
     t = text.strip()
     start = t.find("<final>")
@@ -148,8 +184,7 @@ def generate_with_retries(
     assistant_role: str,
 ) -> str:
     """
-    DeepSeek-R1 类模型有时会把“思考/计划”当成可见输出。
-    这里做最多 2 次重试：逐步加硬约束，并在最后一次把温度压到 0。
+    生成回复，直接返回结果，不进行思考过程检测和重试。
     """
     ans = generate_one(
         model=model,
@@ -159,61 +194,14 @@ def generate_with_retries(
         temperature=temperature,
         top_p=top_p,
     )
+    
+    # 尝试提取 <final> 标签中的内容
     final = extract_final(ans)
     if final:
         return final
-    if not looks_like_thought(ans):
-        return ans
-
-    role_prefix = f"{assistant_role}：" if assistant_role else "公诉人："
-
-    # 重试 1：额外 system 强约束 + 要求以角色前缀开头
-    msgs_retry = list(messages)
-    msgs_retry.insert(
-        1,
-        {
-            "role": "system",
-            "content": (
-                f"严格执行：只输出 <final>{role_prefix}...你的最终发言</final>。"
-                "不要输出任何过程/思考/解释/计划。"
-            ),
-        },
-    )
-    ans2 = generate_one(
-        model=model,
-        tokenizer=tokenizer,
-        messages=msgs_retry,
-        max_new_tokens=max_new_tokens,
-        temperature=max(0.0, min(temperature, 0.3)),
-        top_p=top_p,
-    )
-    final2 = extract_final(ans2)
-    if final2:
-        return final2
-    if not looks_like_thought(ans2):
-        return ans2
-
-    # 重试 2：再加一个 user 指令，并把温度降到 0（更确定）
-    msgs_retry2 = list(msgs_retry)
-    msgs_retry2.append(
-        {
-            "role": "user",
-            "content": (
-                f"只输出这一种格式：<final>{role_prefix}（此处写你的最终发言）</final>。"
-                "不要输出任何其它文字。"
-            ),
-        }
-    )
-    ans3 = generate_one(
-        model=model,
-        tokenizer=tokenizer,
-        messages=msgs_retry2,
-        max_new_tokens=max_new_tokens,
-        temperature=0.0,
-        top_p=1.0,
-    )
-    final3 = extract_final(ans3)
-    return final3 if final3 else ans3
+    
+    # 如果没有 final 标签，直接返回原始输出
+    return ans
 
 
 def generate_one(
@@ -224,13 +212,28 @@ def generate_one(
     temperature: float,
     top_p: float,
 ) -> str:
-    enc = tokenizer.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_tensors="pt",
-        return_dict=True,
-    )
+    """
+    生成回复。对于 DeepSeek-R1 系列模型，尝试禁用 thinking 机制。
+    """
+    # 尝试禁用 thinking 模式（对于 DeepSeek-R1 系列模型）
+    try:
+        enc = tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
+            enable_thinking=False,  # 尝试禁用思考模式
+        )
+    except TypeError:
+        # 如果不支持 enable_thinking 参数，使用默认方式
+        enc = tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+            return_dict=True,
+        )
     
     # 确定模型所在的设备 - 通过检查模型参数的实际设备
     first_param = next(model.parameters())
@@ -358,7 +361,16 @@ def main() -> int:
             bnb_4bit_compute_dtype=torch.float16,
         )
 
-    tokenizer = AutoTokenizer.from_pretrained(adapter_dir, use_fast=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(adapter_dir, use_fast=True)
+    except Exception as e:
+        print(f"[警告] 从适配器目录加载 tokenizer 失败: {e}")
+        print(f"[信息] 尝试从基础模型加载 tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(
+            base_model_name,
+            use_fast=True,
+            trust_remote_code=True,
+        )
     
     # 设置默认CUDA设备（在加载模型之前）
     if torch.cuda.is_available() and gpu_id is not None:
@@ -386,15 +398,42 @@ def main() -> int:
     
     # 加载模型
     print(f"[信息] 开始加载基础模型: {base_model_name}")
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_name,
-        device_map=device_map,
-        torch_dtype=torch_dtype,
-        quantization_config=quant_config,
-        low_cpu_mem_usage=True,
-        trust_remote_code=True,
-    )
-    print(f"[信息] 基础模型加载完成")
+    print(f"[提示] 如果网络连接失败，请尝试：")
+    print(f"  1. 设置环境变量: set HF_ENDPOINT=https://hf-mirror.com")
+    print(f"  2. 或使用本地模型路径（如果已下载）")
+    print(f"  3. 检查网络连接和防火墙设置")
+    
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_name,
+            device_map=device_map,
+            dtype=torch_dtype,  # 使用 dtype 而不是 torch_dtype（已弃用）
+            quantization_config=quant_config,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+        )
+        print(f"[信息] 基础模型加载完成")
+    except Exception as e:
+        error_msg = str(e)
+        if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+            print(f"\n[错误] 网络连接失败，无法从 Hugging Face 下载模型")
+            print(f"[解决方案]")
+            print(f"  1. 使用镜像站点（推荐）：")
+            print(f"     在命令行中设置: set HF_ENDPOINT=https://hf-mirror.com")
+            print(f"     然后重新运行此脚本")
+            print(f"  2. 使用代理：")
+            print(f"     set HTTP_PROXY=http://your-proxy:port")
+            print(f"     set HTTPS_PROXY=http://your-proxy:port")
+            print(f"  3. 手动下载模型到本地：")
+            print(f"     如果模型已下载到本地目录，使用 --base_model 指定本地路径")
+            print(f"     例如: --base_model ./models/deepseek-r1-distill-llama-8b")
+            print(f"  4. 检查网络连接：")
+            print(f"     尝试访问: https://hf-mirror.com")
+            print(f"\n[详细错误信息]")
+            print(f"{error_msg}")
+        else:
+            print(f"\n[错误] 加载模型失败: {error_msg}")
+        raise
     
     # 加载PEFT适配器，确保也在GPU上
     print(f"[信息] 加载PEFT适配器: {adapter_dir}")
@@ -544,42 +583,128 @@ def main() -> int:
         return 0
 
     # 交互式对话
-    print("\n进入交互模式：直接输入内容回车；输入 /reset 清空历史；输入 /exit 退出。\n")
+    print("\n" + "="*60)
+    print("进入交互式测试模式")
+    print("="*60)
+    print("\n可用命令：")
+    print("  /help      - 显示帮助信息")
+    print("  /reset     - 清空对话历史")
+    print("  /history   - 显示对话历史")
+    print("  /save      - 保存对话历史到文件")
+    print("  /exit      - 退出程序")
+    print("\n提示：直接输入内容并回车即可与模型对话")
+    print("-"*60 + "\n")
+    
+    conversation_count = 0
+    
     while True:
         try:
             user_text = input("你> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print()
+            print("\n\n程序已退出。")
             break
 
         if not user_text:
             continue
-        if user_text.lower() in {"/exit", "exit", "quit"}:
+            
+        # 处理命令
+        cmd = user_text.lower()
+        
+        if cmd in {"/exit", "exit", "quit"}:
+            print("\n感谢使用！再见。")
             break
-        if user_text.lower() in {"/reset", "reset"}:
+            
+        if cmd in {"/reset", "reset"}:
             history.clear()
-            print("（已清空历史）")
+            conversation_count = 0
+            print("（已清空对话历史）\n")
+            continue
+            
+        if cmd in {"/help", "help", "/h"}:
+            print("\n" + "="*60)
+            print("帮助信息")
+            print("="*60)
+            print("\n命令说明：")
+            print("  /help      - 显示此帮助信息")
+            print("  /reset     - 清空所有对话历史，重新开始")
+            print("  /history   - 显示当前对话历史（最近10轮）")
+            print("  /save      - 将对话历史保存到文件（infer_conversation_YYYYMMDD_HHMMSS.txt）")
+            print("  /exit      - 退出程序")
+            print("\n使用提示：")
+            print("  - 直接输入内容即可与模型对话")
+            print("  - 建议在提示词中明确角色，如：'审判员：...' 或 '公诉人：...'")
+            print("  - 使用 /reset 可以清空历史，开始新的对话")
+            print("  - 使用 /save 可以保存对话记录")
+            print("-"*60 + "\n")
+            continue
+            
+        if cmd in {"/history", "history", "/his"}:
+            if not history:
+                print("（当前没有对话历史）\n")
+            else:
+                print("\n" + "="*60)
+                print(f"对话历史（共 {len(history)} 条消息，显示最近10轮）")
+                print("="*60)
+                # 显示最近10轮对话（20条消息）
+                recent_history = history[-20:] if len(history) > 20 else history
+                for i, msg in enumerate(recent_history, 1):
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")
+                    # 截断过长的内容
+                    if len(content) > 200:
+                        content = content[:200] + "..."
+                    role_name = "用户" if role == "user" else "模型"
+                    print(f"\n[{i}] {role_name}:")
+                    print(f"    {content}")
+                print("-"*60 + "\n")
+            continue
+            
+        if cmd in {"/save", "save"}:
+            if not history:
+                print("（没有对话历史可保存）\n")
+                continue
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"infer_conversation_{timestamp}.txt"
+            try:
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write("="*60 + "\n")
+                    f.write("模型交互对话记录\n")
+                    f.write(f"生成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"适配器目录: {adapter_dir}\n")
+                    f.write(f"基础模型: {base_model_name}\n")
+                    if assistant_role:
+                        f.write(f"助手角色: {assistant_role}\n")
+                    f.write("="*60 + "\n\n")
+                    
+                    # 写入系统提示（如果有）
+                    if system_prompt:
+                        f.write("系统提示:\n")
+                        f.write("-"*60 + "\n")
+                        f.write(system_prompt[:500] + ("..." if len(system_prompt) > 500 else "") + "\n")
+                        f.write("-"*60 + "\n\n")
+                    
+                    # 写入对话历史
+                    f.write("对话历史:\n")
+                    f.write("-"*60 + "\n\n")
+                    for i, msg in enumerate(history, 1):
+                        role = msg.get("role", "unknown")
+                        content = msg.get("content", "")
+                        role_name = "用户" if role == "user" else "模型"
+                        f.write(f"[{i}] {role_name}:\n")
+                        f.write(f"{content}\n\n")
+                    f.write("="*60 + "\n")
+                print(f"（对话历史已保存到: {filename}）\n")
+            except Exception as e:
+                print(f"（保存失败: {e}）\n")
             continue
 
         msgs = _build_messages(system_prompt, history, user_text)
         
-        # 调试信息：显示消息结构
-        if len(history) == 0:  # 只在第一次交互时显示
-            print(f"[调试] 消息结构: {len(msgs)} 条消息")
-            for i, msg in enumerate(msgs):
-                role = msg.get("role", "unknown")
-                content = msg.get("content", "")
-                preview = content[:100] + "..." if len(content) > 100 else content
-                print(f"  [{i+1}] {role}: {preview}")
-            print()
+        conversation_count += 1
         
-        # 显示GPU使用情况（推理前）
-        if torch.cuda.is_available():
-            first_param = next(model.parameters())
-            if first_param.device.type == 'cuda':
-                gpu_idx = first_param.device.index
-                allocated_before = torch.cuda.memory_allocated(gpu_idx) / 1024**3
-                print(f"[调试] 推理前GPU内存: {allocated_before:.2f}GB (设备: cuda:{gpu_idx})")
+        # 显示推理进度
+        print(f"[第 {conversation_count} 轮对话] 正在生成回复...", end="", flush=True)
         
         import time
         start_time = time.time()
@@ -594,15 +719,11 @@ def main() -> int:
         )
         elapsed_time = time.time() - start_time
         
-        # 显示GPU使用情况（推理后）
-        if torch.cuda.is_available():
-            first_param = next(model.parameters())
-            if first_param.device.type == 'cuda':
-                gpu_idx = first_param.device.index
-                allocated_after = torch.cuda.memory_allocated(gpu_idx) / 1024**3
-                print(f"[调试] 推理后GPU内存: {allocated_after:.2f}GB, 耗时: {elapsed_time:.2f}秒")
+        # 清除进度提示，显示结果
+        print("\r" + " " * 50 + "\r", end="")  # 清除进度提示
         
-        print(f"模型> {ans}\n")
+        print(f"模型> {ans}")
+        print(f"[耗时: {elapsed_time:.2f}秒]\n")
 
         # 保存对话历史
         history.append({"role": "user", "content": user_text})

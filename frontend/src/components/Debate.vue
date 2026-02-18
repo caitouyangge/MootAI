@@ -341,11 +341,13 @@ const generateAiResponse = async (role, prompt) => {
     }
     
     const response = await request.post('/debate/generate', {
-      user_identity: userIdentity.value,
-      current_role: role,
+      userIdentity: userIdentity.value,
+      currentRole: role,
       messages: messageHistory,
-      judge_type: selectedJudgeType.value || 'neutral',
-      case_description: caseDescription.value || ''
+      judgeType: selectedJudgeType.value || 'neutral',
+      caseDescription: caseDescription.value || ''
+    }, {
+      timeout: 0 // 取消超时限制，允许AI生成长时间运行
     })
     
     if (response.code === 200 && response.data) {

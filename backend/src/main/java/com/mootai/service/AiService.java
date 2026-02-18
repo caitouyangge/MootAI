@@ -26,6 +26,7 @@ public class AiService {
     
     /**
      * 生成法庭辩论回复
+     * 将旧格式转换为训练数据格式
      * 
      * @param userIdentity 用户身份（plaintiff 或 defendant）
      * @param currentRole 当前角色（judge, plaintiff, defendant）
@@ -44,12 +45,10 @@ public class AiService {
         try {
             String url = aiServiceUrl + "/api/debate/generate";
             
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("user_identity", userIdentity);
-            requestBody.put("current_role", currentRole);
-            requestBody.put("messages", messages);
-            requestBody.put("judge_type", judgeType);
-            requestBody.put("case_description", caseDescription);
+            // 转换为训练数据格式
+            Map<String, Object> requestBody = convertToTrainingFormat(
+                    userIdentity, currentRole, messages, judgeType, caseDescription
+            );
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -81,7 +80,7 @@ public class AiService {
                     log.info("  [{}] {}: {}", i + 1, msg.get("name"), textPreview);
                 }
             }
-            log.info("完整请求体: {}", objectMapper.writeValueAsString(requestBody));
+            log.info("转换后的请求体（训练数据格式）: {}", objectMapper.writeValueAsString(requestBody));
             log.info("================================================");
             
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
@@ -106,6 +105,154 @@ public class AiService {
             log.error("调用AI服务异常", e);
             throw new RuntimeException("AI服务调用异常: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * 将旧格式转换为训练数据格式
+     * 
+     * @param userIdentity 用户身份
+     * @param currentRole 当前角色
+     * @param messages 对话历史
+     * @param judgeType 法官类型
+     * @param caseDescription 案件描述
+     * @return 训练数据格式的请求体
+     */
+    private Map<String, Object> convertToTrainingFormat(
+            String userIdentity,
+            String currentRole,
+            List<Map<String, Object>> messages,
+            String judgeType,
+            String caseDescription
+    ) {
+        Map<String, Object> requestBody = new HashMap<>();
+        
+        // 1. 转换 agent_role（当前AI扮演的角色）
+        String agentRole = convertRoleToChinese(currentRole);
+        requestBody.put("agent_role", agentRole);
+        
+        // 2. 转换 background（案件背景）
+        String background = caseDescription != null ? caseDescription : "";
+        requestBody.put("background", background);
+        
+        // 3. 转换 context（对话历史，用\n分隔）
+        String context = convertMessagesToContext(messages);
+        requestBody.put("context", context);
+        
+        // 4. 转换 instruction（角色指令，包含法官类型、诉讼策略等）
+        String instruction = buildInstruction(currentRole, judgeType, userIdentity);
+        requestBody.put("instruction", instruction);
+        
+        return requestBody;
+    }
+    
+    /**
+     * 将角色转换为中文
+     */
+    private String convertRoleToChinese(String role) {
+        if (role == null) {
+            return "审判员";
+        }
+        switch (role.toLowerCase()) {
+            case "judge":
+                return "审判员";
+            case "plaintiff":
+                return "原告";
+            case "defendant":
+                return "被告";
+            default:
+                return role;
+        }
+    }
+    
+    /**
+     * 将消息列表转换为context格式（用\n分隔）
+     * 格式：角色名: 内容\n角色名: 内容
+     */
+    private String convertMessagesToContext(List<Map<String, Object>> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return "";
+        }
+        
+        StringBuilder context = new StringBuilder();
+        for (int i = 0; i < messages.size(); i++) {
+            Map<String, Object> msg = messages.get(i);
+            String name = (String) msg.get("name");
+            Object textObj = msg.get("text");
+            String text = textObj != null ? textObj.toString() : "";
+            
+            if (name != null && !text.isEmpty()) {
+                if (context.length() > 0) {
+                    context.append("\n");
+                }
+                context.append(name).append(": ").append(text);
+            }
+        }
+        
+        return context.toString();
+    }
+    
+    /**
+     * 构建instruction（角色指令）
+     * 包含法官类型、诉讼策略等信息
+     */
+    private String buildInstruction(String currentRole, String judgeType, String userIdentity) {
+        StringBuilder instruction = new StringBuilder();
+        
+        if ("judge".equalsIgnoreCase(currentRole)) {
+            // 法官角色的instruction
+            instruction.append("作为审判员，你需要：\n");
+            instruction.append("1. 保持中立、客观、公正的立场\n");
+            instruction.append("2. 引导庭审程序有序进行，控制庭审节奏\n");
+            instruction.append("3. 对争议焦点进行归纳和总结\n");
+            instruction.append("4. 确保各方充分表达意见，维护庭审秩序\n");
+            instruction.append("5. 基于事实和法律进行判断，不偏不倚\n\n");
+            
+            // 添加法官类型特征
+            if (judgeType != null && !judgeType.isEmpty()) {
+                instruction.append("法官类型特征：\n");
+                switch (judgeType) {
+                    case "professional":
+                        instruction.append("你是一位专业型法官，讲话简洁，业务熟练，判决果断。");
+                        break;
+                    case "strong":
+                        instruction.append("你是一位强势型法官，专业能力出众，细节能力强。");
+                        break;
+                    case "partial-plaintiff":
+                        instruction.append("你是一位偏袒型法官，习惯对原告宽容。");
+                        break;
+                    case "partial-defendant":
+                        instruction.append("你是一位偏袒型法官，习惯对被告宽容。");
+                        break;
+                    case "neutral":
+                    default:
+                        instruction.append("你是一位中立型法官，保持中立，注重程序公正。");
+                        break;
+                }
+            }
+        } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
+            // 原告角色的instruction
+            instruction.append("作为原告代理律师，你需要：\n");
+            instruction.append("1. 代表原告维护权益，提出诉讼请求\n");
+            instruction.append("2. 提供证据和理由支持诉讼请求\n");
+            instruction.append("3. 回应被告的答辩意见\n");
+            instruction.append("4. 围绕争议焦点组织举证质证\n");
+            instruction.append("5. 强调事实和法律依据\n\n");
+            instruction.append("诉讼策略：均衡策略，主张明确，证据充分，但不过度激化矛盾。");
+        } else if ("defendant".equalsIgnoreCase(currentRole)) {
+            // 被告角色的instruction
+            instruction.append("作为被告代理律师，你需要：\n");
+            instruction.append("1. 代表被告进行辩护，反驳原告指控\n");
+            instruction.append("2. 提出有利于被告的证据和事实\n");
+            instruction.append("3. 质疑原告证据的合法性、真实性、关联性\n");
+            instruction.append("4. 维护被告权益\n");
+            instruction.append("5. 争取从轻、减轻或免除责任\n\n");
+            instruction.append("诉讼策略：保守策略，优先考虑通过调解解决争议，可适当让步。");
+        } else {
+            // 默认instruction
+            instruction.append("请根据你的角色定位，在法庭辩论中保持专业严谨。");
+        }
+        
+        return instruction.toString();
     }
     
     /**

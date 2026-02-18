@@ -24,3 +24,4 @@ public class DebateRequest {
     private String caseDescription = ""; // 案件描述
 }
 
+

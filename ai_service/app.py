@@ -35,6 +35,74 @@ EXTERNAL_AI_BASE_URL = "https://chatapi.zjt66.top/v1"
 EXTERNAL_AI_MODEL = "gpt-4o-mini"
 
 
+def resolve_model_path(adapter_dir: str) -> str:
+    """解析模型路径，支持相对路径和绝对路径"""
+    # 如果是绝对路径，直接返回
+    if os.path.isabs(adapter_dir):
+        if not os.path.exists(adapter_dir):
+            raise FileNotFoundError(f"模型目录不存在: {adapter_dir}")
+        return adapter_dir
+    
+    # 相对路径：尝试多个可能的位置（去重）
+    # 优先检查项目根目录，因为模型目录应该在项目根目录下
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # ai_service 目录
+    project_root = os.path.dirname(script_dir)  # 项目根目录 D:\MootAI
+    current_work_dir = os.getcwd()
+    
+    # 收集所有可能的路径（去重，按优先级排序）
+    candidate_paths = []
+    path_labels = []
+    
+    # 1. 项目根目录（最高优先级，模型目录应该在项目根目录下）
+    project_root_path = os.path.join(project_root, adapter_dir)
+    project_root_path_abs = os.path.abspath(project_root_path)
+    if project_root_path_abs not in candidate_paths:
+        candidate_paths.append(project_root_path_abs)
+        path_labels.append(f"项目根目录 ({project_root})")
+    
+    # 2. 当前工作目录
+    current_dir_path = os.path.abspath(adapter_dir)
+    if current_dir_path not in candidate_paths:
+        candidate_paths.append(current_dir_path)
+        path_labels.append(f"当前工作目录 ({current_work_dir})")
+    
+    # 3. ai_service 目录（脚本所在目录）
+    script_dir_path = os.path.join(script_dir, adapter_dir)
+    script_dir_path_abs = os.path.abspath(script_dir_path)
+    if script_dir_path_abs not in candidate_paths:
+        candidate_paths.append(script_dir_path_abs)
+        path_labels.append(f"脚本所在目录 ({script_dir})")
+    
+    # 依次检查每个路径
+    for path in candidate_paths:
+        if os.path.exists(path):
+            return path
+    
+    # 如果都找不到，抛出错误（显示去重后的路径）
+    error_msg = f"❌ 找不到模型目录 '{adapter_dir}'\n\n"
+    error_msg += "已尝试以下位置：\n"
+    for i, (path, label) in enumerate(zip(candidate_paths, path_labels), 1):
+        error_msg += f"  {i}. {label}\n     → {path}\n"
+    
+    error_msg += "\n" + "="*60 + "\n"
+    error_msg += "解决方案：\n\n"
+    error_msg += "方案1：将模型目录放到以下任一位置：\n"
+    for path in candidate_paths[:2]:  # 只显示前两个推荐位置
+        error_msg += f"  • {path}\n"
+    
+    error_msg += "\n方案2：使用环境变量指定模型目录的绝对路径：\n"
+    error_msg += "  Windows: set ADAPTER_DIR=D:\\path\\to\\court_debate_model\n"
+    error_msg += "  Linux/Mac: export ADAPTER_DIR=/path/to/court_debate_model\n"
+    
+    error_msg += "\n方案3：在启动脚本中设置（推荐）：\n"
+    error_msg += "  编辑 ai_service/start_service.bat，修改 ADAPTER_DIR 环境变量\n"
+    
+    error_msg += "\n注意：模型目录必须包含 adapter_config.json 文件。\n"
+    error_msg += "="*60
+    
+    raise FileNotFoundError(error_msg)
+
+
 def get_model():
     """获取模型实例（单例模式）"""
     global _model, _model_lock
@@ -43,7 +111,12 @@ def get_model():
         _model_lock = True
         try:
             logger.info("正在加载AI模型...")
-            adapter_dir = os.getenv("ADAPTER_DIR", "court_debate_model")
+            adapter_dir_env = os.getenv("ADAPTER_DIR", "court_debate_model")
+            
+            # 解析模型路径
+            adapter_dir = resolve_model_path(adapter_dir_env)
+            logger.info(f"使用模型目录: {adapter_dir}")
+            
             load_in_4bit = os.getenv("LOAD_IN_4BIT", "true").lower() == "true"
             gpu_id = int(os.getenv("GPU_ID", "0"))
             
@@ -158,52 +231,263 @@ def chat():
 def debate_generate():
     """
     法庭辩论生成
-    根据用户身份和当前对话历史，生成对方律师或法官的回复
+    支持两种输入格式：
+    1. 训练数据格式（推荐）：
+       {
+         "agent_role": "审判员",  // 当前要回复的角色
+         "background": "...",     // 案件背景
+         "context": "...",        // 对话历史（用\n分隔）
+         "role_to_reply": "辩护人", // 要回复的角色
+         "instruction": "..."     // 角色指令
+       }
+    2. 旧格式（向后兼容）：
+       {
+         "user_identity": "plaintiff",
+         "current_role": "judge",
+         "messages": [...],
+         "judge_type": "neutral",
+         "case_description": "..."
+       }
     """
     try:
         data = request.json
-        user_identity = data.get('user_identity')  # 'plaintiff' 或 'defendant'
-        current_role = data.get('current_role')  # 'judge', 'plaintiff', 'defendant'
-        messages = data.get('messages', [])  # 对话历史
-        judge_type = data.get('judge_type', 'neutral')  # 法官类型
-        case_description = data.get('case_description', '')  # 案件描述
         
-        if not user_identity or not current_role:
-            return jsonify({'error': 'user_identity和current_role参数不能为空'}), 400
-        
-        model = get_model()
-        if model is None:
-            return jsonify({'error': '模型未加载'}), 500
-        
-        # 构建系统提示词
-        system_prompt = build_system_prompt(user_identity, current_role, judge_type, case_description)
-        assistant_role = get_assistant_role_name(current_role)
-        
-        # 构建消息历史
-        formatted_messages = format_messages_for_ai(messages)
-        
-        # 生成回复
-        response = model.chat(
-            messages=formatted_messages,
-            max_new_tokens=512,
-            temperature=0.6,
-            top_p=0.9,
-            system_prompt=system_prompt,
-            assistant_role=assistant_role
-        )
-        
-        return jsonify({
-            'response': response,
-            'role': current_role,
-            'success': True
-        })
+        # 检查是否为训练数据格式
+        if 'agent_role' in data or 'context' in data:
+            # 使用训练数据格式
+            return debate_generate_training_format(data)
+        else:
+            # 使用旧格式（向后兼容）
+            return debate_generate_legacy_format(data)
     
     except Exception as e:
         logger.error(f"辩论生成失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'error': str(e),
             'success': False
         }), 500
+
+
+def debate_generate_training_format(data):
+    """
+    使用训练数据格式生成回复
+    
+    输入字段说明：
+    - agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
+    - background: 案件背景（前面保存的案件描述）
+    - context: 上下文（对话历史，用\n分隔）
+    - instruction: 角色指令（包含诉讼策略、法官类型等）
+    - role_to_reply: 要回复的角色（可选，默认与agent_role相同）
+    """
+    agent_role = data.get('agent_role')  # 当前AI扮演的角色
+    background = data.get('background', '')  # 案件背景（从前面保存的案件描述获取）
+    context = data.get('context', '')  # 上下文（对话历史，用\n分隔）
+    role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色（可选）
+    instruction = data.get('instruction', '')  # 角色指令（包含诉讼策略、法官类型等）
+    
+    if not agent_role:
+        return jsonify({'error': 'agent_role参数不能为空'}), 400
+    
+    logger.info(f"[训练格式] agent_role={agent_role}, background长度={len(background)}, context长度={len(context)}, instruction长度={len(instruction)}")
+    if instruction:
+        logger.info(f"[训练格式] instruction预览: {instruction[:200]}...")
+    
+    model = get_model()
+    if model is None:
+        return jsonify({'error': '模型未加载'}), 500
+    
+    # 构建系统提示词（基于训练数据格式）
+    system_prompt = build_system_prompt_from_training_format(
+        agent_role=agent_role,
+        background=background,
+        instruction=instruction
+    )
+    logger.info(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
+    
+    # 将context转换为消息格式
+    formatted_messages = format_context_to_messages(context)
+    logger.info(f"[训练格式] 转换后的消息数量: {len(formatted_messages)}")
+    if formatted_messages:
+        logger.info(f"[训练格式] 第一条消息预览: {formatted_messages[0].get('content', '')[:100]}...")
+        logger.info(f"[训练格式] 最后一条消息预览: {formatted_messages[-1].get('content', '')[:100]}...")
+    
+    # 生成回复
+    response = model.chat(
+        messages=formatted_messages,
+        max_new_tokens=512,
+        temperature=0.6,
+        top_p=0.9,
+        system_prompt=system_prompt,
+        assistant_role=agent_role
+    )
+    
+    logger.info(f"[训练格式] 生成回复长度: {len(response)}")
+    
+    return jsonify({
+        'response': response,
+        'role': agent_role,
+        'success': True
+    })
+
+
+def debate_generate_legacy_format(data):
+    """使用旧格式生成回复（向后兼容）"""
+    user_identity = data.get('user_identity')  # 'plaintiff' 或 'defendant'
+    current_role = data.get('current_role')  # 'judge', 'plaintiff', 'defendant'
+    messages = data.get('messages', [])  # 对话历史
+    judge_type = data.get('judge_type', 'neutral')  # 法官类型
+    case_description = data.get('case_description', '')  # 案件描述
+    
+    if not user_identity or not current_role:
+        return jsonify({'error': 'user_identity和current_role参数不能为空'}), 400
+    
+    model = get_model()
+    if model is None:
+        return jsonify({'error': '模型未加载'}), 500
+    
+    # 构建系统提示词
+    system_prompt = build_system_prompt(user_identity, current_role, judge_type, case_description)
+    assistant_role = get_assistant_role_name(current_role)
+    
+    # 构建消息历史
+    formatted_messages = format_messages_for_ai(messages)
+    
+    # 生成回复
+    response = model.chat(
+        messages=formatted_messages,
+        max_new_tokens=512,
+        temperature=0.6,
+        top_p=0.9,
+        system_prompt=system_prompt,
+        assistant_role=assistant_role
+    )
+    
+    return jsonify({
+        'response': response,
+        'role': current_role,
+        'success': True
+    })
+
+
+def build_system_prompt_from_training_format(agent_role, background, instruction):
+    """
+    根据训练数据格式构建系统提示词
+    
+    Args:
+        agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
+        background: 案件背景（前面保存的案件描述）
+        instruction: 角色指令（包含诉讼策略、法官类型等）
+    """
+    base_prompt = "你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。\n\n"
+    
+    # 1. 添加角色定义
+    role_definitions = {
+        '审判员': '角色：审判员\n职责：主持庭审，引导辩论，确保程序公正',
+        '公诉人': '角色：公诉人\n职责：代表国家行使公诉权，指控犯罪事实，出示并质证证据',
+        '辩护人': '角色：辩护人\n职责：维护被告人的合法权益，针对指控提出辩护意见和反驳',
+        '原告': '角色：原告代理律师\n职责：代表原告维护权益，提出诉讼请求，提供证据和理由',
+        '被告': '角色：被告代理律师\n职责：代表被告进行辩护，反驳原告指控，维护被告权益'
+    }
+    
+    role_def = role_definitions.get(agent_role, f'角色：{agent_role}')
+    base_prompt += f"【角色定义】\n{role_def}\n\n"
+    
+    # 2. 添加案件背景（从前面保存的案件描述获取）
+    if background:
+        base_prompt += f"【案件背景】\n{background}\n\n"
+    
+    # 3. 添加角色指令（instruction字段，包含诉讼策略、法官类型等）
+    # 这是最重要的部分，包含了具体的策略指导和角色特征
+    if instruction:
+        base_prompt += f"【角色指令与策略】\n{instruction}\n\n"
+    else:
+        # 如果没有提供instruction，使用默认指令
+        default_instructions = {
+            '审判员': '请严格按照以下要求：\n1. 保持中立、客观、公正的立场\n2. 引导庭审程序有序进行，控制庭审节奏\n3. 对争议焦点进行归纳和总结\n4. 确保各方充分表达意见，维护庭审秩序\n5. 基于事实和法律进行判断，不偏不倚',
+            '公诉人': '请严格按照以下要求：\n1. 代表国家行使公诉权，指控犯罪事实\n2. 出示并质证证据，证明犯罪构成要件\n3. 回应辩方意见，维护指控的合法性\n4. 围绕争议焦点组织举证质证\n5. 强调主客观要件与因果关系，突出量刑情节',
+            '辩护人': '请严格按照以下要求：\n1. 维护被告人的合法权益\n2. 针对指控提出辩护意见和反驳\n3. 提出有利于被告人的证据和事实\n4. 质疑控方证据的合法性、真实性、关联性\n5. 为被告人争取从轻、减轻或免除处罚',
+            '原告': '请严格按照以下要求：\n1. 代表原告维护权益，提出诉讼请求\n2. 提供证据和理由支持诉讼请求\n3. 回应被告的答辩意见\n4. 围绕争议焦点组织举证质证\n5. 强调事实和法律依据',
+            '被告': '请严格按照以下要求：\n1. 代表被告进行辩护，反驳原告指控\n2. 提出有利于被告的证据和事实\n3. 质疑原告证据的合法性、真实性、关联性\n4. 维护被告权益\n5. 争取从轻、减轻或免除责任'
+        }
+        default_instruction = default_instructions.get(agent_role, '请根据你的角色定位，在法庭辩论中保持专业严谨。')
+        base_prompt += f"【角色指令与策略】\n{default_instruction}\n\n"
+    
+    # 4. 添加通用要求
+    base_prompt += "【通用要求】\n"
+    base_prompt += "请根据你的角色定位，在法庭辩论中：\n"
+    base_prompt += "1. 根据对话历史理解当前辩论阶段和焦点\n"
+    base_prompt += "2. 根据角色标记（审判员/公诉人/辩护人/原告/被告）切换相应的语言风格\n"
+    base_prompt += "3. 遵循法庭辩论的逻辑顺序和程序规范\n"
+    base_prompt += "4. 基于事实和法律条文进行专业辩论"
+    
+    return base_prompt
+
+
+def format_context_to_messages(context):
+    """
+    将训练数据格式的context（用\n分隔的对话）转换为消息格式
+    
+    输入格式：
+    "审判员: 现在开庭...\n公诉人: 根据起诉书...\n辩护人: 我方认为..."
+    或
+    "审判员：现在开庭...\n公诉人：根据起诉书...\n辩护人：我方认为..."
+    
+    输出格式：
+    [
+        {"role": "user", "content": "审判员：现在开庭..."},
+        {"role": "assistant", "content": "公诉人：根据起诉书..."},
+        {"role": "user", "content": "辩护人：我方认为..."}
+    ]
+    """
+    if not context:
+        return []
+    
+    messages = []
+    lines = context.strip().split('\n')
+    
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            continue
+        
+        # 解析角色和内容（支持英文冒号:和中文冒号：）
+        role_name = ''
+        content = line
+        
+        # 优先匹配中文冒号（更常见）
+        if '：' in line:
+            parts = line.split('：', 1)
+            role_name = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else ''
+        elif ':' in line:
+            # 支持英文冒号（训练数据格式）
+            parts = line.split(':', 1)
+            role_name = parts[0].strip()
+            content = parts[1].strip() if len(parts) > 1 else ''
+        
+        # 确定消息角色（交替使用user和assistant）
+        # 第一条消息通常是user，后续交替
+        if i == 0:
+            msg_role = 'user'
+        else:
+            # 根据前一条消息的角色决定
+            prev_role = messages[-1].get('role', 'user')
+            msg_role = 'assistant' if prev_role == 'user' else 'user'
+        
+        # 构建消息内容（统一使用中文冒号）
+        if role_name:
+            msg_content = f"{role_name}：{content}"
+        else:
+            msg_content = content
+        
+        messages.append({
+            'role': msg_role,
+            'content': msg_content
+        })
+    
+    return messages
 
 
 def build_system_prompt(user_identity, current_role, judge_type, case_description):
