@@ -122,6 +122,29 @@
 
       <!-- 内容区域 -->
       <div class="content-area fade-in">
+        <!-- 阶段引导提示 -->
+        <div v-if="activeTab === 'pretrial'" class="stage-guide">
+          <div class="guide-icon">📋</div>
+          <div class="guide-content">
+            <div class="guide-title">庭前准备阶段</div>
+            <div class="guide-desc">请完成以下步骤：选择身份 → 上传资料 → 生成案件描述</div>
+          </div>
+        </div>
+        <div v-else-if="activeTab === 'debate'" class="stage-guide">
+          <div class="guide-icon">⚖️</div>
+          <div class="guide-content">
+            <div class="guide-title">庭中辩论阶段</div>
+            <div class="guide-desc">选择法官类型，开始模拟法庭辩论。您可以随时查看庭前准备的材料。</div>
+          </div>
+        </div>
+        <div v-else-if="activeTab === 'verdict'" class="stage-guide">
+          <div class="guide-icon">📜</div>
+          <div class="guide-content">
+            <div class="guide-title">庭后宣判阶段</div>
+            <div class="guide-desc">查看系统生成的判决书，了解庭审结果。</div>
+          </div>
+        </div>
+        
         <PreTrial 
           v-if="activeTab === 'pretrial'" 
           ref="preTrialRef"
@@ -277,7 +300,18 @@ const navigateToTab = (tab) => {
   // 检查是否可以访问该步骤
   if (!canAccessStep(tab)) {
     const step = steps.find(s => s.key === tab)
-    const currentStep = steps.find(s => stepStatus.value[s.key] && !stepStatus.value[steps.find(ss => ss.order === s.order + 1)?.key])
+    // 找到当前应该完成的步骤（第一个未完成的步骤）
+    const currentStep = steps.find(s => {
+      const stepOrder = s.order
+      // 如果当前步骤已完成，检查下一步是否可访问
+      if (stepStatus.value[s.key]) {
+        const nextStep = steps.find(ss => ss.order === stepOrder + 1)
+        return nextStep && !stepStatus.value[nextStep.key]
+      }
+      // 如果当前步骤未完成，就是当前应该完成的步骤
+      return !stepStatus.value[s.key]
+    })
+    
     if (currentStep) {
       ElMessage.warning(`请先完成"${currentStep.name}"，才能进入"${step?.name}"`)
     } else {
@@ -773,6 +807,40 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   min-height: 300px;
   width: 100%;
+}
+
+/* 阶段引导提示 */
+.stage-guide {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--primary-purple);
+  margin-bottom: 16px;
+}
+
+.guide-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.guide-content {
+  flex: 1;
+}
+
+.guide-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.guide-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 /* 回到顶部按钮 */

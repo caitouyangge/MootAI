@@ -338,7 +338,10 @@ def debate_generate_legacy_format(data):
     current_role = data.get('current_role')  # 'judge', 'plaintiff', 'defendant'
     messages = data.get('messages', [])  # 对话历史
     judge_type = data.get('judge_type', 'neutral')  # 法官类型
-    case_description = data.get('case_description', '')  # 案件描述
+    case_description = data.get('case_description', '')  # 案件描述（现在可能包含完整的background）
+    check_mode = data.get('checkMode', False)  # 是否为判断模式
+    prompt = data.get('prompt', '')  # 特殊提示词（用于判断模式）
+    is_first_judge_speech = data.get('isFirstJudgeSpeech', False)  # 是否为首次法官发言
     
     if not user_identity or not current_role:
         return jsonify({'error': 'user_identity和current_role参数不能为空'}), 400
@@ -348,11 +351,19 @@ def debate_generate_legacy_format(data):
         return jsonify({'error': '模型未加载'}), 500
     
     # 构建系统提示词
+    # case_description 现在可能包含完整的background（身份信息、文件列表、案件描述、诉讼策略等）
     system_prompt = build_system_prompt(user_identity, current_role, judge_type, case_description)
     assistant_role = get_assistant_role_name(current_role)
     
     # 构建消息历史
     formatted_messages = format_messages_for_ai(messages)
+    
+    # 如果是判断模式且有特殊提示词，添加提示词
+    if check_mode and prompt:
+        formatted_messages.append({
+            'role': 'user',
+            'content': prompt
+        })
     
     # 生成回复
     response = model.chat(
@@ -491,11 +502,13 @@ def format_context_to_messages(context):
 
 
 def build_system_prompt(user_identity, current_role, judge_type, case_description):
-    """构建系统提示词"""
+    """构建系统提示词
+    case_description 现在可能包含完整的background（身份信息、文件列表、案件描述、诉讼策略等）
+    """
     base_prompt = "你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。\n\n"
     
     if current_role == 'judge':
-        # 法官角色
+        # 法官角色 - 法官类型会加入角色提示词中
         judge_prompts = {
             'professional': '你是一位专业型法官，讲话简洁，业务熟练，判决果断。',
             'strong': '你是一位强势型法官，专业能力出众，细节能力强。',
@@ -504,6 +517,7 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
             'neutral': '你是一位中立型法官，保持中立，注重程序公正。'
         }
         role_prompt = judge_prompts.get(judge_type, judge_prompts['neutral'])
+        base_prompt += f"{role_prompt}\n\n"
         base_prompt += f"角色定义：\n- 角色：审判员\n- 职责：主持庭审，引导辩论，确保程序公正\n\n"
     elif current_role == 'plaintiff':
         # 原告律师角色
@@ -512,8 +526,10 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
         # 被告律师角色
         base_prompt += f"角色定义：\n- 角色：被告代理律师\n- 职责：代表被告进行辩护，反驳原告指控，维护被告权益\n\n"
     
+    # case_description 现在包含完整的background（身份信息、文件列表、案件描述、诉讼策略等）
+    # 这些信息在每次AI回答时都要能看到
     if case_description:
-        base_prompt += f"案件背景：\n{case_description}\n\n"
+        base_prompt += f"{case_description}\n\n"
     
     base_prompt += "请根据你的角色定位，在法庭辩论中：\n"
     base_prompt += "1. 根据对话历史理解当前辩论阶段和焦点\n"

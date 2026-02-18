@@ -554,11 +554,28 @@ watch(caseDescription, (newVal) => {
   }
 })
 
-// 组件挂载时，如果有已完成的步骤，跳转到第一个未完成的步骤
+// 组件挂载时，根据实际完成情况跳转到正确的步骤
 onMounted(() => {
-  const firstIncompleteStep = steps.find(step => !stepStatus.value[step.key])
-  if (firstIncompleteStep) {
-    currentStep.value = firstIncompleteStep.key
+  // 检查每个步骤是否真正完成（不仅仅是可访问）
+  // 1. identity 步骤：检查是否选择了身份
+  const hasIdentity = selectedIdentity.value && selectedIdentity.value !== ''
+  
+  // 2. upload 步骤：检查是否有上传的文件
+  const hasFiles = fileList.value && fileList.value.length > 0
+  
+  // 3. description 步骤：检查是否有案件描述
+  const hasDescription = caseDescription.value && caseDescription.value.trim() !== ''
+  
+  // 根据实际完成情况决定显示哪个步骤
+  if (!hasIdentity) {
+    // 如果还没有选择身份，显示身份选择页面
+    currentStep.value = 'identity'
+  } else if (!hasFiles) {
+    // 如果还没有上传文件，显示上传页面
+    currentStep.value = 'upload'
+  } else if (!hasDescription) {
+    // 如果还没有生成描述，显示描述生成页面
+    currentStep.value = 'description'
   } else {
     // 所有步骤都完成了，显示最后一步
     currentStep.value = steps[steps.length - 1].key

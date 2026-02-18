@@ -1,5 +1,41 @@
 <template>
   <div class="debate-container">
+    <!-- 庭前准备材料查看 -->
+    <div class="pretrial-materials-section">
+      <div class="materials-header">
+        <h3 class="section-title">庭前准备材料</h3>
+        <el-button
+          text
+          size="small"
+          @click="showMaterials = !showMaterials"
+          class="toggle-btn"
+        >
+          {{ showMaterials ? '收起' : '查看' }}
+        </el-button>
+      </div>
+      <el-collapse-transition>
+        <div v-show="showMaterials" class="materials-content">
+          <div class="material-item">
+            <div class="material-label">身份：</div>
+            <div class="material-value">{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}</div>
+          </div>
+          <div class="material-item" v-if="fileList.length > 0">
+            <div class="material-label">上传文件：</div>
+            <div class="material-value">
+              <div v-for="(file, index) in fileList" :key="index" class="file-item">
+                <span class="file-icon">📄</span>
+                <span>{{ file.name }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="material-item" v-if="caseDescription">
+            <div class="material-label">案件描述：</div>
+            <div class="material-value case-description">{{ caseDescription }}</div>
+          </div>
+        </div>
+      </el-collapse-transition>
+    </div>
+
     <!-- 法官类型选择 -->
     <div class="judge-select-section">
       <h3 class="section-title">选择法官类型</h3>
@@ -206,6 +242,8 @@ const emit = defineEmits(['complete'])
 const caseStore = useCaseStore()
 const userIdentity = ref(caseStore.selectedIdentity || route.query.identity || 'plaintiff')
 const caseDescription = ref(caseStore.caseDescription || '')
+const fileList = ref(caseStore.fileList || [])
+const showMaterials = ref(false)
 
 // 法官类型
 const judgeTypes = ref([
@@ -286,12 +324,10 @@ const startDebate = async () => {
   debateCompleted.value = false
   debateStarted.value = true
   
-  // 法官宣布开始
-  const judgePrompt = userIdentity.value === 'plaintiff' 
-    ? '现在开庭。请原告陈述诉讼请求和事实理由。'
-    : '现在开庭。请被告针对原告的指控进行答辩。'
+  // 法官宣布开始（开庭时必须发言引导原告发言）
+  const judgePrompt = '现在开庭。请原告陈述诉讼请求和事实理由。'
   
-  await generateAiResponse('judge', judgePrompt)
+  await generateAiResponse('judge', judgePrompt, true)
 }
 
 // 发送用户消息
@@ -308,17 +344,162 @@ const sendMessage = async () => {
   
   // 生成对方律师的回复
   const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
-  await generateAiResponse(opponentRole, userText)
+  await generateAiResponse(opponentRole, userText, false)
   
-  // 生成法官的回复（可选，根据对话流程决定）
-  // 这里可以根据对话轮次决定是否生成法官回复
-  if (messages.value.length % 4 === 0) {
-    await generateAiResponse('judge', '请继续辩论。')
+  // 每发言一轮后（用户发言 + 对方律师回复），法官AI判断是否应该发言
+  // 如果法官发言，发言完应该决定下一个发言人的身份
+  // 如果法官不发言，由原告和被告轮流发言
+  await checkJudgeShouldSpeak()
+}
+
+// 构建完整的background参数（包含庭前准备的所有资料）
+const buildBackground = () => {
+  let background = ''
+  
+  // 1. 身份信息
+  background += `【身份信息】\n`
+  background += `用户身份：${userIdentity.value === 'plaintiff' ? '原告' : '被告'}\n\n`
+  
+  // 2. 文件列表
+  if (fileList.value && fileList.value.length > 0) {
+    background += `【上传文件】\n`
+    fileList.value.forEach((file, index) => {
+      background += `${index + 1}. ${file.name}\n`
+      // 如果有文件内容，也包含进去
+      if (file.content) {
+        background += `   内容预览：${file.content.substring(0, 200)}${file.content.length > 200 ? '...' : ''}\n`
+      }
+    })
+    background += `\n`
+  }
+  
+  // 3. 案件描述
+  if (caseDescription.value) {
+    background += `【案件描述】\n${caseDescription.value}\n\n`
+  }
+  
+  // 4. 诉讼策略
+  background += `【诉讼策略】\n`
+  if (userIdentity.value === 'plaintiff') {
+    background += `原告策略：${plaintiffStrategy.value}\n`
+    background += `被告策略：${defendantStrategy.value}\n`
+  } else {
+    background += `被告策略：${defendantStrategy.value}\n`
+    background += `原告策略：${plaintiffStrategy.value}\n`
+  }
+  
+  return background
+}
+
+// 检查法官是否应该发言
+const checkJudgeShouldSpeak = async () => {
+  if (isGenerating.value) return
+  
+  // 构建判断提示词
+  const judgeCheckPrompt = `根据当前的庭审对话历史，请判断作为审判员，你是否需要发言。
+  
+要求：
+1. 如果需要发言，请直接发言，发言内容要符合审判员的角色定位。
+2. 如果不需要发言，请只输出"不需要发言"，然后由原告和被告继续轮流发言。
+3. 如果你发言了，请在发言的最后明确指定下一个发言人的身份（"请原告继续"或"请被告继续"）。`
+  
+  try {
+    const messageHistory = messages.value.map(msg => ({
+      role: msg.role,
+      name: msg.name,
+      text: msg.text
+    }))
+    
+    const response = await request.post('/debate/generate', {
+      userIdentity: userIdentity.value,
+      currentRole: 'judge',
+      messages: messageHistory,
+      judgeType: selectedJudgeType.value || 'neutral',
+      caseDescription: buildBackground(), // 使用完整的background
+      checkMode: true, // 标记为判断模式
+      prompt: judgeCheckPrompt
+    }, {
+      timeout: 0
+    })
+    
+    if (response.code === 200 && response.data) {
+      const judgeResponse = response.data.trim()
+      
+      // 判断法官是否发言（如果包含"不需要发言"，则不发言）
+      if (judgeResponse && !judgeResponse.includes('不需要发言')) {
+        // 法官发言
+        addMessage('judge', '法官', judgeResponse)
+        
+        // 法官发言后，从发言内容中提取下一个发言人
+        await extractNextSpeakerFromJudgeSpeech(judgeResponse)
+      } else {
+        // 法官不发言，由原告和被告轮流发言
+        await continueAlternatingDebate()
+      }
+    }
+  } catch (error) {
+    console.error('法官判断失败:', error)
+    // 如果判断失败，默认继续轮流发言
+    await continueAlternatingDebate()
+  }
+}
+
+// 从法官发言中提取下一个发言人
+const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
+  // 检查发言中是否指定了下一个发言人
+  if (judgeSpeech.includes('请原告') || judgeSpeech.includes('原告继续') || judgeSpeech.includes('原告发言')) {
+    await generateAiResponse('plaintiff', '', false)
+  } else if (judgeSpeech.includes('请被告') || judgeSpeech.includes('被告继续') || judgeSpeech.includes('被告发言')) {
+    await generateAiResponse('defendant', '', false)
+  } else {
+    // 如果没有明确指定，根据对话历史决定
+    await decideNextSpeaker()
+  }
+}
+
+// 决定下一个发言人（法官发言后调用）
+const decideNextSpeaker = async () => {
+  // 获取最后一条消息的角色
+  const lastMessage = messages.value[messages.value.length - 1]
+  const lastRole = lastMessage.role
+  
+  // 如果最后是法官发言，根据对话历史决定下一个发言人
+  if (lastRole === 'judge') {
+    // 简单逻辑：如果最后是原告发言，下一个是被告；反之亦然
+    const plaintiffMessages = messages.value.filter(m => m.role === 'plaintiff')
+    const defendantMessages = messages.value.filter(m => m.role === 'defendant')
+    
+    if (plaintiffMessages.length <= defendantMessages.length) {
+      // 原告发言次数少，下一个是原告
+      await generateAiResponse('plaintiff', '', false)
+    } else {
+      // 被告发言次数少，下一个是被告
+      await generateAiResponse('defendant', '', false)
+    }
+  }
+}
+
+// 继续原告和被告轮流发言
+const continueAlternatingDebate = async () => {
+  // 获取最后一条非法官消息的角色
+  const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
+  
+  if (!lastNonJudgeMessage) {
+    // 如果没有非法官消息，默认原告发言
+    await generateAiResponse('plaintiff', '', false)
+    return
+  }
+  
+  // 如果最后是原告发言，下一个是被告；反之亦然
+  if (lastNonJudgeMessage.role === 'plaintiff') {
+    await generateAiResponse('defendant', '', false)
+  } else {
+    await generateAiResponse('plaintiff', '', false)
   }
 }
 
 // 生成AI回复
-const generateAiResponse = async (role, prompt) => {
+const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
   if (isGenerating.value) return
   
   isGenerating.value = true
@@ -340,12 +521,16 @@ const generateAiResponse = async (role, prompt) => {
       })
     }
     
+    // 构建完整的background（包含所有庭前准备资料）
+    const background = buildBackground()
+    
     const response = await request.post('/debate/generate', {
       userIdentity: userIdentity.value,
       currentRole: role,
       messages: messageHistory,
       judgeType: selectedJudgeType.value || 'neutral',
-      caseDescription: caseDescription.value || ''
+      caseDescription: background, // 使用完整的background，包含所有庭前准备资料
+      isFirstJudgeSpeech: isFirstJudgeSpeech // 标记是否为首次法官发言
     }, {
       timeout: 0 // 取消超时限制，允许AI生成长时间运行
     })
@@ -430,6 +615,83 @@ onMounted(() => {
   font-weight: 600;
   padding-bottom: 10px;
   border-bottom: 2px solid #f0f0f0;
+}
+
+/* 庭前准备材料查看 */
+.pretrial-materials-section {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.materials-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.toggle-btn {
+  font-size: 12px;
+  color: #409eff;
+}
+
+.materials-content {
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.material-item {
+  display: flex;
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+
+.material-item:last-child {
+  margin-bottom: 0;
+}
+
+.material-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.material-value {
+  font-size: 12px;
+  color: #666;
+  flex: 1;
+  line-height: 1.6;
+}
+
+.case-description {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.file-item:last-child {
+  margin-bottom: 0;
+}
+
+.file-icon {
+  font-size: 14px;
 }
 
 /* 法官类型选择 */

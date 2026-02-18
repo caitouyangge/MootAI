@@ -114,7 +114,7 @@ public class AiService {
      * @param currentRole 当前角色
      * @param messages 对话历史
      * @param judgeType 法官类型
-     * @param caseDescription 案件描述
+     * @param caseDescription 案件描述（现在包含完整的庭前准备资料）
      * @return 训练数据格式的请求体
      */
     private Map<String, Object> convertToTrainingFormat(
@@ -130,7 +130,12 @@ public class AiService {
         String agentRole = convertRoleToChinese(currentRole);
         requestBody.put("agent_role", agentRole);
         
-        // 2. 转换 background（案件背景）
+        // 2. 转换 background（案件背景，现在包含所有庭前准备资料）
+        // caseDescription 参数现在已经是完整的background，包含：
+        // - 身份信息
+        // - 上传文件列表
+        // - 案件描述
+        // - 诉讼策略
         String background = caseDescription != null ? caseDescription : "";
         requestBody.put("background", background);
         
@@ -194,41 +199,45 @@ public class AiService {
     /**
      * 构建instruction（角色指令）
      * 包含法官类型、诉讼策略等信息
+     * 对于法官角色，法官类型会加入角色提示词中
      */
     private String buildInstruction(String currentRole, String judgeType, String userIdentity) {
         StringBuilder instruction = new StringBuilder();
         
         if ("judge".equalsIgnoreCase(currentRole)) {
             // 法官角色的instruction
+            // 首先添加法官类型特征（这是最重要的，会直接影响法官的发言风格）
+            if (judgeType != null && !judgeType.isEmpty()) {
+                switch (judgeType) {
+                    case "professional":
+                        instruction.append("你是一位专业型法官，讲话简洁，业务熟练，判决果断。\n\n");
+                        break;
+                    case "strong":
+                        instruction.append("你是一位强势型法官，专业能力出众，细节能力强。\n\n");
+                        break;
+                    case "partial-plaintiff":
+                        instruction.append("你是一位偏袒型法官，习惯对原告宽容。\n\n");
+                        break;
+                    case "partial-defendant":
+                        instruction.append("你是一位偏袒型法官，习惯对被告宽容。\n\n");
+                        break;
+                    case "neutral":
+                    default:
+                        instruction.append("你是一位中立型法官，保持中立，注重程序公正。\n\n");
+                        break;
+                }
+            }
+            
+            // 然后添加法官职责
             instruction.append("作为审判员，你需要：\n");
             instruction.append("1. 保持中立、客观、公正的立场\n");
             instruction.append("2. 引导庭审程序有序进行，控制庭审节奏\n");
             instruction.append("3. 对争议焦点进行归纳和总结\n");
             instruction.append("4. 确保各方充分表达意见，维护庭审秩序\n");
-            instruction.append("5. 基于事实和法律进行判断，不偏不倚\n\n");
-            
-            // 添加法官类型特征
-            if (judgeType != null && !judgeType.isEmpty()) {
-                instruction.append("法官类型特征：\n");
-                switch (judgeType) {
-                    case "professional":
-                        instruction.append("你是一位专业型法官，讲话简洁，业务熟练，判决果断。");
-                        break;
-                    case "strong":
-                        instruction.append("你是一位强势型法官，专业能力出众，细节能力强。");
-                        break;
-                    case "partial-plaintiff":
-                        instruction.append("你是一位偏袒型法官，习惯对原告宽容。");
-                        break;
-                    case "partial-defendant":
-                        instruction.append("你是一位偏袒型法官，习惯对被告宽容。");
-                        break;
-                    case "neutral":
-                    default:
-                        instruction.append("你是一位中立型法官，保持中立，注重程序公正。");
-                        break;
-                }
-            }
+            instruction.append("5. 基于事实和法律进行判断，不偏不倚\n");
+            instruction.append("6. 在开庭时必须发言引导原告发言\n");
+            instruction.append("7. 每发言一轮后，判断自己是否应该发言。如果发言，发言完应该决定下一个发言人的身份（原告或被告）\n");
+            instruction.append("8. 如果不需要发言，由原告和被告方律师轮流发言");
         } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
             // 原告角色的instruction
             instruction.append("作为原告代理律师，你需要：\n");
