@@ -633,6 +633,9 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
   const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
   currentSpeakingRole.value = roleName
   
+  // 用于保存首次法官发言的文本，以便在 finally 块中使用
+  let firstJudgeSpeechText = null
+  
   try {
     // 准备消息历史（包含当前prompt作为上下文）
     const messageHistory = messages.value.map(msg => ({
@@ -669,6 +672,11 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
       const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
       addMessage(role, roleName, aiText)
       
+      // 如果是首次法官发言，保存文本以便后续处理
+      if (isFirstJudgeSpeech && role === 'judge') {
+        firstJudgeSpeechText = aiText
+      }
+      
       // 检查是否应该结束庭审
       if (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭')) {
         debateCompleted.value = true
@@ -688,6 +696,15 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
   } finally {
     isGenerating.value = false
     currentSpeakingRole.value = '' // 发言结束，清空当前发言角色
+    
+    // 如果是首次法官发言，发言后需要决定下一个发言人
+    // 在 finally 块中调用，确保 isGenerating 已经重置
+    if (isFirstJudgeSpeech && role === 'judge' && firstJudgeSpeechText) {
+      // 使用 nextTick 确保在下一个事件循环中调用，避免阻塞
+      await nextTick()
+      // 从法官发言中提取下一个发言人
+      await extractNextSpeakerFromJudgeSpeech(firstJudgeSpeechText)
+    }
   }
 }
 
