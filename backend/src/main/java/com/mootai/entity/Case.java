@@ -40,6 +40,9 @@ public class Case {
     @Column(name = "opponent_strategy", length = 50)
     private String opponentStrategy; // 对方AI律师的辩论策略
     
+    @Column(name = "debate_messages", columnDefinition = "TEXT")
+    private String debateMessages; // 辩论消息（JSON格式存储）
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     

@@ -27,6 +27,7 @@ public class CaseService {
         caseEntity.setFileNames(request.getFileNames() != null ? request.getFileNames() : new ArrayList<>());
         caseEntity.setJudgeType(request.getJudgeType());
         caseEntity.setOpponentStrategy(request.getOpponentStrategy());
+        caseEntity.setDebateMessages(request.getDebateMessages());
         
         return caseRepository.save(caseEntity);
     }
@@ -51,6 +52,10 @@ public class CaseService {
         // judgeType 和 opponentStrategy 允许设置为 null（如果前端发送 null）
         caseEntity.setJudgeType(request.getJudgeType());
         caseEntity.setOpponentStrategy(request.getOpponentStrategy());
+        // debateMessages 允许设置为 null（如果前端发送 null）
+        if (request.getDebateMessages() != null) {
+            caseEntity.setDebateMessages(request.getDebateMessages());
+        }
         
         return caseRepository.save(caseEntity);
     }

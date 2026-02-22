@@ -17,5 +17,7 @@ public class CaseRequest {
     private String judgeType; // 法官类型（可选）
     
     private String opponentStrategy; // 对方AI律师的辩论策略（可选）
+    
+    private String debateMessages; // 辩论消息（JSON格式，可选）
 }
 

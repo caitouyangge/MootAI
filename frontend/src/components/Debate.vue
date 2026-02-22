@@ -372,11 +372,22 @@ const startEdit = (index, text) => {
 }
 
 // 保存编辑
-const saveEdit = (index) => {
+const saveEdit = async (index) => {
   if (editingIndex.value === index && editingText.value.trim()) {
     messages.value[index].text = editingText.value.trim()
     // TODO: 基于修改重新生成后续对话（AI部分暂时没有）
     ElMessage.success('内容已更新')
+    
+    // 保存到localStorage
+    localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+    
+    // 保存到数据库
+    if (caseStore.caseId) {
+      clearTimeout(saveDebateMessagesTimer)
+      saveDebateMessagesTimer = setTimeout(() => {
+        saveDebateMessages()
+      }, 500) // 编辑后立即保存（0.5秒延迟）
+    }
   }
   editingIndex.value = -1
   editingText.value = ''
@@ -397,6 +408,15 @@ const startDebate = async () => {
   messages.value = []
   debateCompleted.value = false
   debateStarted.value = true
+  
+  // 清除之前的辩论完成标记
+  localStorage.removeItem('debateCompleted')
+  
+  // 立即保存空消息列表到数据库（标记辩论开始）
+  if (caseStore.caseId) {
+    clearTimeout(saveDebateMessagesTimer)
+    await saveDebateMessages()
+  }
   
   // 法官宣布开始（开庭时必须发言引导原告发言）
   const judgePrompt = '现在开庭。请原告陈述诉讼请求和事实理由。'
@@ -685,6 +705,11 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
         localStorage.setItem('debateMessages', JSON.stringify(messages.value))
         // 标记辩论完成
         localStorage.setItem('debateCompleted', 'true')
+        // 立即保存到数据库（不等待防抖）
+        if (caseStore.caseId) {
+          clearTimeout(saveDebateMessagesTimer)
+          await saveDebateMessages()
+        }
         // 触发完成事件
         emit('complete')
       }
@@ -709,6 +734,31 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
   }
 }
 
+// 保存辩论消息到数据库（使用防抖）
+const saveDebateMessages = async () => {
+  if (!caseStore.caseId) {
+    // 如果没有 caseId，无法保存
+    return
+  }
+  
+  try {
+    const debateMessagesJson = JSON.stringify(messages.value)
+    
+    const caseData = {
+      debateMessages: debateMessagesJson
+    }
+    
+    await request.put(`/cases/${caseStore.caseId}`, caseData)
+    // 静默保存，不显示成功消息，避免干扰用户
+  } catch (error) {
+    console.error('保存辩论消息失败:', error)
+    // 静默失败，不显示错误消息，避免干扰用户
+  }
+}
+
+// 防抖保存定时器
+let saveDebateMessagesTimer = null
+
 // 添加消息
 const addMessage = (role, name, text) => {
   const now = new Date()
@@ -723,6 +773,14 @@ const addMessage = (role, name, text) => {
   
   // 实时保存对话历史到localStorage
   localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+  
+  // 保存到数据库（使用防抖，避免频繁请求）
+  if (caseStore.caseId) {
+    clearTimeout(saveDebateMessagesTimer)
+    saveDebateMessagesTimer = setTimeout(() => {
+      saveDebateMessages()
+    }, 1000) // 1秒后保存
+  }
   
   // 滚动到底部
   nextTick(() => {
@@ -886,10 +944,100 @@ const pollModelStatus = () => {
   }, 1000) // 每秒轮询一次
 }
 
+// 加载辩论消息从数据库
+const loadDebateMessages = async () => {
+  if (!caseStore.caseId) {
+    // 如果没有 caseId，尝试从 localStorage 恢复
+    const savedMessages = localStorage.getItem('debateMessages')
+    if (savedMessages) {
+      try {
+        messages.value = JSON.parse(savedMessages)
+        // 如果加载了消息，说明辩论已开始
+        if (messages.value.length > 0) {
+          debateStarted.value = true
+        }
+      } catch (error) {
+        console.error('从 localStorage 加载辩论消息失败:', error)
+      }
+    }
+    return
+  }
+  
+  try {
+    const response = await request.get(`/cases/${caseStore.caseId}`)
+    if (response.code === 200 && response.data) {
+      const caseData = response.data
+      
+      // 如果有保存的辩论消息，恢复它们
+      if (caseData.debateMessages) {
+        try {
+          messages.value = JSON.parse(caseData.debateMessages)
+          // 如果加载了消息，说明辩论已开始
+          if (messages.value.length > 0) {
+            debateStarted.value = true
+            // 同时保存到 localStorage 作为备份
+            localStorage.setItem('debateMessages', caseData.debateMessages)
+          }
+        } catch (error) {
+          console.error('解析辩论消息失败:', error)
+          // 如果解析失败，尝试从 localStorage 恢复
+          const savedMessages = localStorage.getItem('debateMessages')
+          if (savedMessages) {
+            try {
+              messages.value = JSON.parse(savedMessages)
+              if (messages.value.length > 0) {
+                debateStarted.value = true
+              }
+            } catch (e) {
+              console.error('从 localStorage 加载辩论消息失败:', e)
+            }
+          }
+        }
+      } else {
+        // 如果没有保存的辩论消息，尝试从 localStorage 恢复
+        const savedMessages = localStorage.getItem('debateMessages')
+        if (savedMessages) {
+          try {
+            messages.value = JSON.parse(savedMessages)
+            if (messages.value.length > 0) {
+              debateStarted.value = true
+            }
+          } catch (error) {
+            console.error('从 localStorage 加载辩论消息失败:', error)
+          }
+        }
+      }
+      
+      // 检查是否已完成辩论
+      const isCompleted = localStorage.getItem('debateCompleted') === 'true'
+      if (isCompleted) {
+        debateCompleted.value = true
+      }
+    }
+  } catch (error) {
+    console.error('加载辩论消息失败:', error)
+    // 如果加载失败，尝试从 localStorage 恢复
+    const savedMessages = localStorage.getItem('debateMessages')
+    if (savedMessages) {
+      try {
+        messages.value = JSON.parse(savedMessages)
+        if (messages.value.length > 0) {
+          debateStarted.value = true
+        }
+      } catch (e) {
+        console.error('从 localStorage 加载辩论消息失败:', e)
+      }
+    }
+  }
+}
+
 // 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
-onMounted(() => {
+onMounted(async () => {
   // 进入辩论阶段时，自动初始化模型
   initModel()
+  
+  // 加载辩论消息
+  await loadDebateMessages()
 })
 
 // 组件卸载时清理定时器
@@ -897,6 +1045,17 @@ onUnmounted(() => {
   if (modelStatusPollTimer.value) {
     clearInterval(modelStatusPollTimer.value)
     modelStatusPollTimer.value = null
+  }
+  
+  // 清理保存定时器
+  if (saveDebateMessagesTimer) {
+    clearTimeout(saveDebateMessagesTimer)
+    saveDebateMessagesTimer = null
+  }
+  
+  // 组件卸载前，立即保存一次辩论消息（确保不丢失）
+  if (caseStore.caseId && messages.value.length > 0) {
+    saveDebateMessages()
   }
 })
 </script>
