@@ -22,6 +22,8 @@ public class DebateRequest {
     private String judgeType = "neutral"; // 法官类型
     
     private String caseDescription = ""; // 案件描述
+    
+    private String opponentStrategy; // 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
 }
 
 

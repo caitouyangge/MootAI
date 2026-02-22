@@ -33,6 +33,7 @@ public class AiService {
      * @param messages 对话历史
      * @param judgeType 法官类型
      * @param caseDescription 案件描述
+     * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
      * @return AI生成的回复
      */
     public String generateDebateResponse(
@@ -40,14 +41,15 @@ public class AiService {
             String currentRole,
             List<Map<String, Object>> messages,
             String judgeType,
-            String caseDescription
+            String caseDescription,
+            String opponentStrategy
     ) {
         try {
             String url = aiServiceUrl + "/api/debate/generate";
             
             // 转换为训练数据格式
             Map<String, Object> requestBody = convertToTrainingFormat(
-                    userIdentity, currentRole, messages, judgeType, caseDescription
+                    userIdentity, currentRole, messages, judgeType, caseDescription, opponentStrategy
             );
             
             HttpHeaders headers = new HttpHeaders();
@@ -115,6 +117,7 @@ public class AiService {
      * @param messages 对话历史
      * @param judgeType 法官类型
      * @param caseDescription 案件描述（现在包含完整的庭前准备资料）
+     * @param opponentStrategy 对方AI律师的辩论策略
      * @return 训练数据格式的请求体
      */
     private Map<String, Object> convertToTrainingFormat(
@@ -122,7 +125,8 @@ public class AiService {
             String currentRole,
             List<Map<String, Object>> messages,
             String judgeType,
-            String caseDescription
+            String caseDescription,
+            String opponentStrategy
     ) {
         Map<String, Object> requestBody = new HashMap<>();
         
@@ -144,7 +148,7 @@ public class AiService {
         requestBody.put("context", context);
         
         // 4. 转换 instruction（角色指令，包含法官类型、诉讼策略等）
-        String instruction = buildInstruction(currentRole, judgeType, userIdentity);
+        String instruction = buildInstruction(currentRole, judgeType, userIdentity, opponentStrategy);
         requestBody.put("instruction", instruction);
         
         return requestBody;
@@ -200,8 +204,13 @@ public class AiService {
      * 构建instruction（角色指令）
      * 包含法官类型、诉讼策略等信息
      * 对于法官角色，法官类型会加入角色提示词中
+     * 
+     * @param currentRole 当前角色（judge, plaintiff, defendant）
+     * @param judgeType 法官类型
+     * @param userIdentity 用户身份（plaintiff 或 defendant）
+     * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
      */
-    private String buildInstruction(String currentRole, String judgeType, String userIdentity) {
+    private String buildInstruction(String currentRole, String judgeType, String userIdentity, String opponentStrategy) {
         StringBuilder instruction = new StringBuilder();
         
         if ("judge".equalsIgnoreCase(currentRole)) {
@@ -246,7 +255,12 @@ public class AiService {
             instruction.append("3. 回应被告的答辩意见\n");
             instruction.append("4. 围绕争议焦点组织举证质证\n");
             instruction.append("5. 强调事实和法律依据\n\n");
-            instruction.append("诉讼策略：均衡策略，主张明确，证据充分，但不过度激化矛盾。");
+            
+            // 根据用户身份和对方策略设置策略
+            // 如果用户是原告，那么当前角色是原告时，使用默认策略（均衡策略）
+            // 如果用户是被告，那么当前角色是原告时，使用对方策略（opponentStrategy）
+            String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy);
+            instruction.append("诉讼策略：").append(strategy);
         } else if ("defendant".equalsIgnoreCase(currentRole)) {
             // 被告角色的instruction
             instruction.append("作为被告代理律师，你需要：\n");
@@ -255,13 +269,52 @@ public class AiService {
             instruction.append("3. 质疑原告证据的合法性、真实性、关联性\n");
             instruction.append("4. 维护被告权益\n");
             instruction.append("5. 争取从轻、减轻或免除责任\n\n");
-            instruction.append("诉讼策略：保守策略，优先考虑通过调解解决争议，可适当让步。");
+            
+            // 根据用户身份和对方策略设置策略
+            // 如果用户是被告，那么当前角色是被告时，使用默认策略（均衡策略）
+            // 如果用户是原告，那么当前角色是被告时，使用对方策略（opponentStrategy）
+            String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy);
+            instruction.append("诉讼策略：").append(strategy);
         } else {
             // 默认instruction
             instruction.append("请根据你的角色定位，在法庭辩论中保持专业严谨。");
         }
         
         return instruction.toString();
+    }
+    
+    /**
+     * 根据角色和用户身份获取策略
+     * 
+     * @param currentRole 当前角色（plaintiff 或 defendant）
+     * @param userIdentity 用户身份（plaintiff 或 defendant）
+     * @param opponentStrategy 对方AI律师的辩论策略
+     * @return 策略描述
+     */
+    private String getStrategyForRole(String currentRole, String userIdentity, String opponentStrategy) {
+        // 如果当前角色是用户自己，使用默认策略（均衡策略）
+        if (currentRole.equalsIgnoreCase(userIdentity)) {
+            return "均衡策略，主张明确，证据充分，但不过度激化矛盾。";
+        }
+        
+        // 如果当前角色是对手，使用用户选择的对方策略
+        if (opponentStrategy != null && !opponentStrategy.isEmpty()) {
+            switch (opponentStrategy.toLowerCase()) {
+                case "aggressive":
+                    return "激进策略：采取强硬立场，积极进攻，不轻易让步。主动质疑对方证据，强调己方优势，对争议点进行深入辩论。";
+                case "conservative":
+                    return "保守策略：优先考虑通过调解解决争议，主张较为温和，可适当让步。避免过度激化矛盾，保持协商空间。";
+                case "balanced":
+                    return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
+                case "defensive":
+                    return "防御策略：重点防守，回应对方质疑，保护己方核心利益。谨慎应对争议点，避免主动进攻。";
+                default:
+                    return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
+            }
+        }
+        
+        // 默认返回均衡策略
+        return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
     }
     
     /**

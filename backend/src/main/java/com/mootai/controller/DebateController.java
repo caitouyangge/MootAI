@@ -28,7 +28,8 @@ public class DebateController {
                 request.getCurrentRole(),
                 request.getMessages(),
                 request.getJudgeType(),
-                request.getCaseDescription()
+                request.getCaseDescription(),
+                request.getOpponentStrategy()
             );
             return ApiResponse.success("生成成功", response);
         } catch (Exception e) {

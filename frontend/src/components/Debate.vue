@@ -662,6 +662,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
       messages: messageHistory,
       judgeType: selectedJudgeType.value || 'neutral',
       caseDescription: background, // 使用完整的background，包含所有庭前准备资料
+      opponentStrategy: opponentStrategy.value || 'balanced', // 对方AI律师的辩论策略
       isFirstJudgeSpeech: isFirstJudgeSpeech // 标记是否为首次法官发言
     }, {
       timeout: 0 // 取消超时限制，允许AI生成长时间运行
