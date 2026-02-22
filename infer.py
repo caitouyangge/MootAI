@@ -141,7 +141,12 @@ def add_no_thought_constraint(system_prompt: str, assistant_role: str = "") -> s
         + "3) 直接进入陈述或反驳，语言风格贴合法庭发言。\n"
         + f"4) 必须以\"{role_prefix}\"开头输出，且不要在开头自述你在做什么。\n"
         + "5) 只写最终发言内容，不要写任何过程性、计划性、分析性的文字。\n"
-        + f"6) 输出格式必须为：<final>{role_prefix}你的最终发言内容</final>。除了 <final>...</final> 标签内的内容外，不要输出任何其他文字。\n"
+        + f"6) 输出格式必须严格按照以下格式，不能有任何偏差：\n"
+        + f"   开始标签：必须完整输出左尖括号、final、右尖括号，即：<final>\n"
+        + f"   内容：{role_prefix}你的最终发言内容\n"
+        + f"   结束标签：必须完整输出左尖括号、斜杠、final、右尖括号，即：</final>\n"
+        + f"   完整示例：<final>{role_prefix}你的最终发言内容</final>\n"
+        + f"   重要：开始标签必须是完整的 <final>（包含左尖括号<、字母final、右尖括号>），不能缺少任何字符。\n"
         + "7) 如果输出不符合要求，系统会自动重试，请确保每次输出都是最终发言，不要包含任何思考过程。"
     )
 
@@ -373,7 +378,9 @@ def generate_one(
             output_ids = model.generate(**generation_kwargs)
 
     new_tokens = output_ids[0, input_ids.shape[-1] :]
-    decoded = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    # 使用 skip_special_tokens=False 以确保所有字符都被正确解码
+    # 这样可以避免 < 字符被错误处理
+    decoded = tokenizer.decode(new_tokens, skip_special_tokens=False).strip()
     
     # 记录生成信息（用于调试）
     import logging
@@ -381,6 +388,11 @@ def generate_one(
     logger.info(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
     logger.info(f"[生成调试] 解码后内容长度: {len(decoded)}")
     logger.info(f"[生成调试] 解码后内容预览: {decoded[:300]}...")
+    
+    # 检查是否包含 <final> 标签，如果没有则检查是否有 final>（可能是生成错误）
+    if "<final>" not in decoded and "final>" in decoded:
+        logger.warning(f"[生成调试] 检测到错误的标签格式 'final>'，应该是 '<final>'")
+        logger.warning(f"[生成调试] 原始生成内容: {decoded[:500]}")
     
     return decoded
 

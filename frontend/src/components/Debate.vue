@@ -60,7 +60,19 @@
 
     <!-- 庭审对话区域 -->
     <div class="debate-chat-section">
-      <h3 class="section-title">庭审现场</h3>
+      <div class="section-header">
+        <h3 class="section-title">庭审现场</h3>
+        <el-button
+          v-if="debateStarted && messages.length > 0"
+          type="warning"
+          size="small"
+          class="reset-debate-btn"
+          @click="handleResetDebate"
+          :icon="Refresh"
+        >
+          重置
+        </el-button>
+      </div>
       <div class="chat-container" ref="chatContainer">
         <!-- 模型初始化提示 -->
         <div v-if="modelInitializing || (modelInitProgress && !modelLoaded)" class="model-init-progress">
@@ -246,8 +258,8 @@
 <script setup>
 import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Loading, Warning } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading, Warning, Refresh } from '@element-plus/icons-vue'
 import { useCaseStore } from '@/stores/case'
 import request from '@/utils/request'
 
@@ -874,6 +886,133 @@ const generateVerdict = () => {
   })
 }
 
+// 重置庭审对话
+const handleResetDebate = async () => {
+  try {
+    // 创建 MutationObserver 来监听弹窗出现
+    const adjustMessageBoxPosition = () => {
+      const messageBox = document.querySelector('.el-message-box')
+      const overlay = document.querySelector('.el-overlay')
+      if (messageBox) {
+        messageBox.style.cssText = `
+          position: fixed !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          margin: 0 !important;
+          z-index: 2001 !important;
+        `
+      }
+      if (overlay) {
+        overlay.style.cssText = `
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          z-index: 2000 !important;
+        `
+      }
+    }
+    
+    // 设置观察器，监听 body 的变化
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('.el-message-box')) {
+        adjustMessageBoxPosition()
+        observer.disconnect() // 调整后断开观察
+      }
+    })
+    
+    // 开始观察
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    })
+    
+    // 显示弹窗
+    await ElMessageBox.confirm(
+      '确定要重置庭审现场吗？这将清空所有对话历史记录，您可以重新开始庭审。',
+      '确认重置',
+      {
+        confirmButtonText: '确定重置',
+        cancelButtonText: '取消',
+        type: 'warning',
+        center: true, // 居中显示
+        customClass: 'reset-debate-message-box', // 自定义样式类
+        appendToBody: true // 确保挂载到 body，不受父容器影响
+      }
+    )
+    
+    // 确保位置调整（双重保险）
+    await nextTick()
+    setTimeout(adjustMessageBoxPosition, 50)
+    setTimeout(adjustMessageBoxPosition, 100)
+    
+    // 清理观察器
+    observer.disconnect()
+    
+    // 清空消息历史
+    messages.value = []
+    
+    // 重置状态
+    debateStarted.value = false
+    debateCompleted.value = false
+    userInput.value = ''
+    currentSpeakingRole.value = ''
+    isGenerating.value = false
+    editingIndex.value = -1
+    editingText.value = ''
+    
+    // 清除localStorage中的辩论记录
+    try {
+      localStorage.removeItem('debateMessages')
+      localStorage.removeItem('debateCompleted')
+    } catch (e) {
+      console.error('清除localStorage失败:', e)
+    }
+    
+    // 清除数据库中的辩论记录
+    if (caseStore.caseId) {
+      try {
+        // 发送空字符串来清空数据库中的辩论消息字段
+        const response = await request.put(`/cases/${caseStore.caseId}`, {
+          debateMessages: '' // 设置为空字符串，清空数据库中的辩论消息
+        })
+        
+        if (response.code === 200) {
+          console.log('数据库辩论记录已清除')
+          // 验证数据库是否真的被清空（可选，用于调试）
+          if (response.data && response.data.debateMessages === '') {
+            console.log('确认：数据库辩论记录已成功清空')
+          }
+        } else {
+          console.warn('清除数据库辩论记录失败:', response.message)
+          ElMessage.warning('本地记录已清除，但数据库更新失败，请刷新页面确认')
+        }
+      } catch (error) {
+        console.error('清除数据库辩论记录失败:', error)
+        // 即使数据库更新失败，localStorage已经清除，仍然提示成功
+        // 但给用户一个警告提示
+        ElMessage.warning('本地记录已清除，但数据库更新可能失败，请刷新页面确认')
+      }
+    }
+    
+    ElMessage.success('庭审现场已重置，可以重新开始庭审')
+    
+    // 滚动到顶部
+    await nextTick()
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = 0
+    }
+  } catch (error) {
+    // 用户取消操作
+    if (error !== 'cancel') {
+      console.error('重置失败:', error)
+      ElMessage.error('重置失败，请重试')
+    }
+  }
+}
+
 // 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
 // 初始化模型
 const initModel = async () => {
@@ -1070,10 +1209,23 @@ onUnmounted(() => {
 .section-title {
   font-size: 12px;
   color: #333;
-  margin: 0 0 15px 0;
+  margin: 0;
   font-weight: 600;
   padding-bottom: 10px;
   border-bottom: 2px solid #f0f0f0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.reset-debate-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  height: auto;
 }
 
 /* 身份信息显示 */
@@ -1692,6 +1844,38 @@ onUnmounted(() => {
   border-color: #06ad56;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+}
+
+/* 重置对话框居中样式 - 确保不受滚动影响 */
+:deep(.reset-debate-message-box) {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+}
+
+/* 确保MessageBox在视口中央，不受滚动影响 */
+:deep(.el-message-box) {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  z-index: 2001 !important;
+}
+
+/* 确保MessageBox遮罩层覆盖整个视口 */
+:deep(.el-overlay) {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 2000 !important;
 }
 </style>
 

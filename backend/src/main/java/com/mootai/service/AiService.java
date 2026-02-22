@@ -90,10 +90,24 @@ public class AiService {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
                 Boolean success = (Boolean) body.get("success");
-                if (Boolean.TRUE.equals(success)) {
-                    String aiResponse = (String) body.get("response");
-                    log.debug("AI服务返回: {}", aiResponse);
-                    return aiResponse;
+                Integer code = (Integer) body.get("code");
+                
+                // 检查success字段或code字段（兼容两种格式）
+                if (Boolean.TRUE.equals(success) || (code != null && code == 200)) {
+                    // Python AI服务返回格式: {"code": 200, "data": "...", "success": true}
+                    // 优先从data字段获取，如果没有则从response字段获取（向后兼容）
+                    String aiResponse = (String) body.get("data");
+                    if (aiResponse == null) {
+                        aiResponse = (String) body.get("response");
+                    }
+                    
+                    if (aiResponse != null) {
+                        log.info("AI服务返回: {}", aiResponse.length() > 100 ? aiResponse.substring(0, 100) + "..." : aiResponse);
+                        return aiResponse;
+                    } else {
+                        log.error("AI服务返回成功，但data和response字段都为空。响应体: {}", body);
+                        throw new RuntimeException("AI服务返回格式错误：data字段为空");
+                    }
                 } else {
                     String error = (String) body.get("error");
                     log.error("AI服务返回错误: {}", error);
