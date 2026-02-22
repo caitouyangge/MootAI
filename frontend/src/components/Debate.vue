@@ -1866,6 +1866,7 @@ onUnmounted(() => {
   margin-left: 4px;
   color: #67c23a;
   font-weight: 500;
+  font-size: 10px;
 }
 
 /* 法官：中间布局 */
