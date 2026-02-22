@@ -466,6 +466,9 @@ const saveEdit = async (index) => {
 
 // 开始庭审
 const startDebate = async () => {
+  console.log('[辩论流程] 开始庭审 - 开始')
+  console.log('[辩论流程] 法官类型:', selectedJudgeType.value, ', 对方策略:', opponentStrategy.value)
+  
   if (!selectedJudgeType.value) {
     ElMessage.warning('请先在庭前准备阶段选择法官类型')
     return
@@ -480,6 +483,8 @@ const startDebate = async () => {
   debateCompleted.value = false
   debateStarted.value = true
   
+  console.log('[辩论流程] 初始化辩论状态完成')
+  
   // 清除之前的辩论完成标记
   localStorage.removeItem('debateCompleted')
   
@@ -491,37 +496,51 @@ const startDebate = async () => {
   
   // 法官宣布开始（开庭时必须发言引导原告发言）
   const judgePrompt = '现在开庭。请原告陈述诉讼请求和事实理由。'
+  console.log('[辩论流程] 生成首次法官发言')
   
   await generateAiResponse('judge', judgePrompt, true)
+  console.log('[辩论流程] 开始庭审 - 结束')
 }
 
 // 发送用户消息
 const sendMessage = async () => {
+  console.log('[辩论流程] 用户发送消息 - 开始')
+  console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', isUserTurn:', isUserTurn.value)
+  
   if (isGenerating.value || !isUserTurn.value) {
+    console.log('[辩论流程] 条件不满足，跳过发送')
     return
   }
   
   // 检查输入框是否有内容
   if (!userInput.value.trim()) {
+    console.log('[辩论流程] 输入框为空，跳过发送')
     return
   }
   
   const userText = userInput.value.trim()
   userInput.value = ''
   
+  console.log('[辩论流程] 用户发言内容长度:', userText.length, ', 预览:', userText.substring(0, 100))
+  
   // 更新当前发言角色为用户
-  currentSpeakingRole.value = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  const userRoleName = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  currentSpeakingRole.value = userRoleName
+  console.log('[辩论流程] 设置用户发言角色:', userRoleName)
   
   // 添加用户消息
-  addMessage(userIdentity.value, userIdentity.value === 'plaintiff' ? '原告' : '被告', userText)
+  addMessage(userIdentity.value, userRoleName, userText)
   
   // 用户发言结束
   currentSpeakingRole.value = ''
+  console.log('[辩论流程] 用户发言完成，清空发言角色')
   
   // 生成对方律师的回复
   // 传递 shouldCheckJudgeAfter=true，让AI回复后自动检查法官（因为已经完成一轮：用户发言 + AI回复）
   const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
+  console.log('[辩论流程] 生成对方律师回复，角色:', opponentRole)
   await generateAiResponse(opponentRole, userText, false, true)
+  console.log('[辩论流程] 用户发送消息 - 结束')
 }
 
 // 生成用户AI代理回复（生成到输入框，不直接发送）
@@ -628,20 +647,33 @@ const buildBackground = () => {
 
 // 检查法官是否应该发言
 const checkJudgeShouldSpeak = async () => {
-  if (isGenerating.value) return
+  console.log('[辩论流程] 检查法官是否应该发言 - 开始')
+  console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
+  console.log('[辩论流程] 消息数量:', messages.value.length)
+  
+  if (isGenerating.value) {
+    console.log('[辩论流程] 正在生成中，跳过检查')
+    return
+  }
   
   // 如果最后一条消息是法官发言，说明法官刚刚发言了，应该从法官发言中提取下一个发言人
   // 这种情况不应该进入这个函数，但如果进入了，应该直接提取下一个发言人
   if (messages.value.length > 0) {
     const lastMessage = messages.value[messages.value.length - 1]
+    console.log('[辩论流程] 最后一条消息 - 角色:', lastMessage.role, ', 内容预览:', lastMessage.text.substring(0, 50))
+    
     if (lastMessage.role === 'judge') {
+      console.log('[辩论流程] 最后是法官发言，从发言中提取下一个发言人')
       // 最后是法官发言，从法官发言中提取下一个发言人
+      // 注意：这里不需要设置isGenerating，因为法官已经发言完成
       await extractNextSpeakerFromJudgeSpeech(lastMessage.text)
+      console.log('[辩论流程] 提取下一个发言人完成')
       return
     }
   }
   
   // 设置生成状态，防止在法官思考时显示"轮到用户发言"
+  console.log('[辩论流程] 设置法官发言状态')
   isGenerating.value = true
   currentSpeakingRole.value = '法官'
   
@@ -660,6 +692,7 @@ const checkJudgeShouldSpeak = async () => {
       text: msg.text
     }))
     
+    console.log('[辩论流程] 调用AI服务判断法官是否需要发言')
     const response = await request.post('/debate/generate', {
       userIdentity: userIdentity.value,
       currentRole: 'judge',
@@ -674,56 +707,80 @@ const checkJudgeShouldSpeak = async () => {
     
     if (response.code === 200 && response.data) {
       const judgeResponse = response.data.trim()
+      console.log('[辩论流程] AI返回法官响应，长度:', judgeResponse.length, ', 预览:', judgeResponse.substring(0, 100))
       
       // 判断法官是否发言（如果包含"不需要发言"，则不发言）
       if (judgeResponse && !judgeResponse.includes('不需要发言')) {
+        console.log('[辩论流程] 法官决定发言，添加消息')
         // 法官发言
         addMessage('judge', '法官', judgeResponse)
         
+        console.log('[辩论流程] 法官发言完成，提取下一个发言人')
         // 法官发言后，从发言内容中提取下一个发言人
+        // 注意：在extractNextSpeakerFromJudgeSpeech中可能会调用generateAiResponse，会设置新的状态
         await extractNextSpeakerFromJudgeSpeech(judgeResponse)
+        console.log('[辩论流程] 提取下一个发言人完成')
       } else {
+        console.log('[辩论流程] 法官决定不发言，继续轮流发言')
         // 法官不发言，由原告和被告轮流发言
         await continueAlternatingDebate()
       }
+    } else {
+      console.error('[辩论流程] AI服务返回错误:', response.message)
     }
   } catch (error) {
-    console.error('法官判断失败:', error)
+    console.error('[辩论流程] 法官判断失败:', error)
     // 如果判断失败，默认继续轮流发言
     await continueAlternatingDebate()
   } finally {
     // 重置生成状态和发言角色
+    // 注意：如果extractNextSpeakerFromJudgeSpeech中调用了generateAiResponse，那个函数会设置新的状态
+    // 所以这里需要确保状态被正确重置
+    console.log('[辩论流程] 重置法官发言状态')
     isGenerating.value = false
     currentSpeakingRole.value = ''
+    console.log('[辩论流程] 检查法官是否应该发言 - 结束，状态已重置')
   }
 }
 
 // 从法官发言中提取下一个发言人
 const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
+  console.log('[辩论流程] 从法官发言中提取下一个发言人 - 开始')
+  console.log('[辩论流程] 法官发言内容预览:', judgeSpeech.substring(0, 200))
+  console.log('[辩论流程] 用户身份:', userIdentity.value)
+  
   // 检查发言中是否指定了下一个发言人
   if (judgeSpeech.includes('请原告') || judgeSpeech.includes('原告继续') || judgeSpeech.includes('原告发言')) {
+    console.log('[辩论流程] 法官指定下一个发言人是原告')
     // 如果用户是原告，轮到用户发言，不需要生成AI回复
     if (userIdentity.value === 'plaintiff') {
+      console.log('[辩论流程] 用户是原告，轮到用户发言，等待用户输入')
       return
     } else {
+      console.log('[辩论流程] 用户是被告，下一个是原告（AI发言），生成AI回复')
       // 用户是被告，下一个是原告（AI发言）
       // 法官发言后，AI回复后不检查法官，等待用户发言
       await generateAiResponse('plaintiff', '', false, false)
     }
   } else if (judgeSpeech.includes('请被告') || judgeSpeech.includes('被告继续') || judgeSpeech.includes('被告发言')) {
+    console.log('[辩论流程] 法官指定下一个发言人是被告')
     // 如果用户是被告，轮到用户发言，不需要生成AI回复
     if (userIdentity.value === 'defendant') {
+      console.log('[辩论流程] 用户是被告，轮到用户发言，等待用户输入')
       return
     } else {
+      console.log('[辩论流程] 用户是原告，下一个是被告（AI发言），生成AI回复')
       // 用户是原告，下一个是被告（AI发言）
       // 法官发言后，AI回复后不检查法官，等待用户发言
       await generateAiResponse('defendant', '', false, false)
     }
   } else {
+    console.log('[辩论流程] 法官未明确指定下一个发言人，根据对话历史决定')
     // 如果没有明确指定，根据对话历史决定
     // 注意：decideNextSpeaker 内部调用 generateAiResponse，也会触发 checkJudgeShouldSpeak
     await decideNextSpeaker()
   }
+  console.log('[辩论流程] 从法官发言中提取下一个发言人 - 结束')
 }
 
 // 决定下一个发言人（法官发言后调用）
@@ -764,16 +821,21 @@ const decideNextSpeaker = async () => {
 
 // 继续原告和被告轮流发言
 const continueAlternatingDebate = async () => {
+  console.log('[辩论流程] 继续原告和被告轮流发言 - 开始')
+  
   // 获取最后一条非法官消息的角色
   const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
   
   if (!lastNonJudgeMessage) {
+    console.log('[辩论流程] 没有非法官消息，判断下一个发言人')
     // 如果没有非法官消息，判断下一个应该是谁
     // 如果用户是原告，下一个应该是原告（用户发言）
     if (userIdentity.value === 'plaintiff') {
+      console.log('[辩论流程] 轮到用户（原告）发言，等待用户输入')
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
+      console.log('[辩论流程] 用户是被告，下一个是原告（AI发言）')
       // 用户是被告，下一个是原告（AI发言）
       // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
       await generateAiResponse('plaintiff', '', false, true)
@@ -781,39 +843,56 @@ const continueAlternatingDebate = async () => {
     }
   }
   
+  console.log('[辩论流程] 最后一条非法官消息 - 角色:', lastNonJudgeMessage.role)
+  
   // 如果最后是原告发言，下一个是被告；反之亦然
   if (lastNonJudgeMessage.role === 'plaintiff') {
+    console.log('[辩论流程] 最后是原告发言，下一个是被告')
     // 下一个是被告
     if (userIdentity.value === 'defendant') {
+      console.log('[辩论流程] 轮到用户（被告）发言，等待用户输入')
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
+      console.log('[辩论流程] 用户是原告，下一个是被告（AI发言）')
       // 用户是原告，下一个是被告（AI发言）
       // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
       await generateAiResponse('defendant', '', false, true)
     }
   } else {
+    console.log('[辩论流程] 最后是被告发言，下一个是原告')
     // 下一个是原告
     if (userIdentity.value === 'plaintiff') {
+      console.log('[辩论流程] 轮到用户（原告）发言，等待用户输入')
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
+      console.log('[辩论流程] 用户是被告，下一个是原告（AI发言）')
       // 用户是被告，下一个是原告（AI发言）
       // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
       await generateAiResponse('plaintiff', '', false, true)
     }
   }
+  console.log('[辩论流程] 继续原告和被告轮流发言 - 结束')
 }
 
 // 生成AI回复
 const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shouldCheckJudgeAfter = false) => {
-  if (isGenerating.value) return
+  console.log('[辩论流程] 生成AI回复 - 开始')
+  console.log('[辩论流程] 参数 - role:', role, ', isFirstJudgeSpeech:', isFirstJudgeSpeech, ', shouldCheckJudgeAfter:', shouldCheckJudgeAfter)
+  console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
+  
+  if (isGenerating.value) {
+    console.log('[辩论流程] 正在生成中，跳过')
+    return
+  }
   
   isGenerating.value = true
   
   // 更新当前发言角色
   const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
   currentSpeakingRole.value = roleName
+  console.log('[辩论流程] 设置发言角色:', roleName)
   
   // 用于保存首次法官发言的文本，以便在 finally 块中使用
   let firstJudgeSpeechText = null
@@ -826,6 +905,8 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
       text: msg.text
     }))
     
+    console.log('[辩论流程] 消息历史数量:', messageHistory.length)
+    
     // 如果prompt不为空，添加一个临时消息作为上下文
     if (prompt) {
       messageHistory.push({
@@ -833,11 +914,13 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
         name: role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告'),
         text: prompt
       })
+      console.log('[辩论流程] 添加prompt到消息历史')
     }
     
     // 构建完整的background（包含所有庭前准备资料）
     const background = buildBackground()
     
+    console.log('[辩论流程] 调用AI服务生成回复')
     const response = await request.post('/debate/generate', {
       userIdentity: userIdentity.value,
       currentRole: role,
@@ -853,15 +936,19 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
     if (response.code === 200 && response.data) {
       const aiText = response.data
       const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
+      console.log('[辩论流程] AI生成成功，角色:', roleName, ', 内容长度:', aiText.length, ', 预览:', aiText.substring(0, 100))
+      
       addMessage(role, roleName, aiText)
       
       // 如果是首次法官发言，保存文本以便后续处理
       if (isFirstJudgeSpeech && role === 'judge') {
         firstJudgeSpeechText = aiText
+        console.log('[辩论流程] 保存首次法官发言文本')
       }
       
       // 检查是否应该结束庭审
       if (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭')) {
+        console.log('[辩论流程] 检测到庭审结束关键词，标记辩论完成')
         debateCompleted.value = true
         // 保存对话历史到localStorage，供判决书生成使用
         localStorage.setItem('debateMessages', JSON.stringify(messages.value))
@@ -876,18 +963,22 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
         emit('complete')
       }
     } else {
+      console.error('[辩论流程] AI服务返回错误:', response.message)
       ElMessage.error(response.message || '生成失败')
     }
   } catch (error) {
-    console.error('生成AI回复失败:', error)
+    console.error('[辩论流程] 生成AI回复失败:', error)
     ElMessage.error('生成失败，请重试: ' + (error.message || '未知错误'))
   } finally {
+    console.log('[辩论流程] 重置生成状态')
     isGenerating.value = false
     currentSpeakingRole.value = '' // 发言结束，清空当前发言角色
+    console.log('[辩论流程] 状态已重置 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
     
     // 如果是首次法官发言，发言后需要决定下一个发言人
     // 在 finally 块中调用，确保 isGenerating 已经重置
     if (isFirstJudgeSpeech && role === 'judge' && firstJudgeSpeechText) {
+      console.log('[辩论流程] 首次法官发言完成，提取下一个发言人')
       // 使用 nextTick 确保在下一个事件循环中调用，避免阻塞
       await nextTick()
       // 从法官发言中提取下一个发言人
@@ -895,14 +986,19 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
     } else if (role === 'plaintiff' || role === 'defendant') {
       // 如果标记了需要检查法官（因为已经完成一轮：用户发言 + AI回复），直接检查法官
       if (shouldCheckJudgeAfter) {
+        console.log('[辩论流程] AI回复完成，需要检查法官是否发言')
         await nextTick()
         await checkJudgeShouldSpeak()
       } else {
+        console.log('[辩论流程] AI回复完成，等待用户发言')
         // AI（对方）发言后，下一个一定是用户，不检查法官，等待用户发言
         // 用户发言后会生成对方AI回复，然后检查法官
         // 所以这里什么都不做，直接返回
       }
+    } else if (role === 'judge') {
+      console.log('[辩论流程] 法官发言完成（非首次），状态已重置')
     }
+    console.log('[辩论流程] 生成AI回复 - 结束')
   }
 }
 

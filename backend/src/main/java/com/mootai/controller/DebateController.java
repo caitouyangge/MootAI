@@ -5,6 +5,7 @@ import com.mootai.dto.DebateRequest;
 import com.mootai.service.AiService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/debate")
 @RequiredArgsConstructor
+@Slf4j
 public class DebateController {
     
     private final AiService aiService;
@@ -22,6 +24,14 @@ public class DebateController {
      */
     @PostMapping("/generate")
     public ApiResponse<String> generateDebateResponse(@Valid @RequestBody DebateRequest request) {
+        log.info("========== 收到辩论生成请求 ==========");
+        log.info("用户身份: {}", request.getUserIdentity());
+        log.info("当前角色: {}", request.getCurrentRole());
+        log.info("法官类型: {}", request.getJudgeType());
+        log.info("对方策略: {}", request.getOpponentStrategy());
+        log.info("对话历史消息数: {}", request.getMessages() != null ? request.getMessages().size() : 0);
+        log.info("案件描述长度: {} 字符", request.getCaseDescription() != null ? request.getCaseDescription().length() : 0);
+        
         try {
             String response = aiService.generateDebateResponse(
                 request.getUserIdentity(),
@@ -31,8 +41,17 @@ public class DebateController {
                 request.getCaseDescription(),
                 request.getOpponentStrategy()
             );
+            
+            log.info("辩论生成成功，响应长度: {} 字符", response != null ? response.length() : 0);
+            if (response != null && response.length() > 0) {
+                log.info("响应预览: {}", response.length() > 200 ? response.substring(0, 200) + "..." : response);
+            }
+            log.info("================================================");
+            
             return ApiResponse.success("生成成功", response);
         } catch (Exception e) {
+            log.error("辩论生成失败: {}", e.getMessage(), e);
+            log.info("================================================");
             return ApiResponse.error("生成失败: " + e.getMessage());
         }
     }
