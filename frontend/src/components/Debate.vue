@@ -634,6 +634,10 @@ const buildBackground = () => {
 const checkJudgeShouldSpeak = async () => {
   if (isGenerating.value) return
   
+  // 设置生成状态，防止在法官思考时显示"轮到用户发言"
+  isGenerating.value = true
+  currentSpeakingRole.value = '法官'
+  
   // 构建判断提示词
   const judgeCheckPrompt = `根据当前的庭审对话历史，请判断作为审判员，你是否需要发言。
   
@@ -680,6 +684,10 @@ const checkJudgeShouldSpeak = async () => {
     console.error('法官判断失败:', error)
     // 如果判断失败，默认继续轮流发言
     await continueAlternatingDebate()
+  } finally {
+    // 重置生成状态和发言角色
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
   }
 }
 
