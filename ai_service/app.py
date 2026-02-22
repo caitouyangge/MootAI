@@ -441,7 +441,7 @@ def generate():
     try:
         data = request.json
         prompt = data.get('prompt', '')
-        max_tokens = data.get('max_new_tokens', 8192)  # 默认值改为8192，基本无限制
+        max_tokens = data.get('max_new_tokens', 1024)  # 优化：默认值改为1024，加快生成速度
         temperature = data.get('temperature', 0.6)
         top_p = data.get('top_p', 0.9)
         system_prompt = data.get('system_prompt')
@@ -485,7 +485,7 @@ def chat():
     try:
         data = request.json
         messages = data.get('messages', [])
-        max_tokens = data.get('max_new_tokens', 8192)  # 默认值改为8192，基本无限制
+        max_tokens = data.get('max_new_tokens', 1024)  # 优化：默认值改为1024，加快生成速度
         temperature = data.get('temperature', 0.6)
         top_p = data.get('top_p', 0.9)
         system_prompt = data.get('system_prompt')
@@ -586,9 +586,7 @@ def debate_generate_training_format(data):
     if not agent_role:
         return jsonify({'error': 'agent_role参数不能为空'}), 400
     
-    logger.info(f"[训练格式] agent_role={agent_role}, background长度={len(background)}, context长度={len(context)}, instruction长度={len(instruction)}")
-    if instruction:
-        logger.info(f"[训练格式] instruction预览: {instruction[:200]}...")
+    logger.debug(f"[训练格式] agent_role={agent_role}, background长度={len(background)}, context长度={len(context)}")
     
     model = get_model()
     if model is None:
@@ -600,27 +598,50 @@ def debate_generate_training_format(data):
         background=background,
         instruction=instruction
     )
-    logger.info(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
+    logger.debug(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
     
-    # 将context转换为消息格式
-    formatted_messages = format_context_to_messages(context)
-    logger.info(f"[训练格式] 转换后的消息数量: {len(formatted_messages)}")
-    if formatted_messages:
-        logger.info(f"[训练格式] 第一条消息预览: {formatted_messages[0].get('content', '')[:100]}...")
-        logger.info(f"[训练格式] 最后一条消息预览: {formatted_messages[-1].get('content', '')[:100]}...")
+    # 将context转换为消息格式（限制消息数量为最近6条）
+    formatted_messages = format_context_to_messages(context, max_messages=6)  # 只保留最近6条消息
+    logger.debug(f"[训练格式] 转换后的消息数量: {len(formatted_messages)}")
     
-    # 生成回复（移除max_new_tokens限制，使用很大的值确保生成完整内容）
+    # 检查模型是否在GPU上（性能关键）
+    try:
+        first_param = next(model.model.parameters())
+        device_info = f"设备: {first_param.device}"
+        if first_param.device.type == 'cuda':
+            import torch
+            allocated = torch.cuda.memory_allocated(first_param.device.index) / 1024**3
+            device_info += f", GPU内存: {allocated:.2f}GB"
+        else:
+            device_info += " [警告: 模型在CPU上，速度会很慢！]"
+        logger.info(f"[性能] {device_info}")
+    except:
+        pass
+    
+    # 生成回复（优化：进一步降低max_new_tokens并优化参数以加快生成速度）
+    import time
+    start_time = time.time()
+    
+    # 计算输入token数（估算）
+    total_input_chars = sum(len(str(msg.get('content', ''))) for msg in formatted_messages) + len(system_prompt)
+    estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
+    logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
+    
+    # 使用greedy decoding（temperature=0）以获得最快速度
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=8192,  # 设置为很大的值，基本无限制
-        temperature=0.6,
-        top_p=0.9,
+        max_new_tokens=512,  # 优化：进一步降低到512，大幅提升速度（约500-700字足够）
+        temperature=0.0,  # 优化：使用greedy decoding（最快）
+        top_p=0.9,  # greedy时top_p会被忽略
         system_prompt=system_prompt,
         assistant_role=agent_role
     )
     
-    logger.info(f"[训练格式] 生成回复长度: {len(response)}")
-    logger.info(f"[训练格式] 生成回复预览: {response[:200]}...")
+    elapsed_time = time.time() - start_time
+    tokens_per_sec = len(response) / 3 / elapsed_time if elapsed_time > 0 else 0  # 粗略估算
+    logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
+    
+    logger.debug(f"[训练格式] 生成回复长度: {len(response)}")
     
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
@@ -665,6 +686,11 @@ def debate_generate_legacy_format(data):
     # 构建消息历史
     formatted_messages = format_messages_for_ai(messages)
     
+    # 限制消息历史长度为最近6条
+    if len(formatted_messages) > 6:
+        logger.debug(f"[优化] 消息历史过长({len(formatted_messages)}条)，截断为最近6条")
+        formatted_messages = formatted_messages[-6:]
+    
     # 如果是判断模式且有特殊提示词，添加提示词
     if check_mode and prompt:
         formatted_messages.append({
@@ -672,18 +698,30 @@ def debate_generate_legacy_format(data):
             'content': prompt
         })
     
-    # 生成回复（移除max_new_tokens限制，使用很大的值确保生成完整内容）
+    # 生成回复（优化：进一步降低max_new_tokens并优化参数以加快生成速度）
+    import time
+    start_time = time.time()
+    
+    # 计算输入token数（估算）
+    total_input_chars = sum(len(str(msg.get('content', ''))) for msg in formatted_messages) + len(system_prompt)
+    estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
+    logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
+    
+    # 使用greedy decoding（temperature=0）以获得最快速度
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=8192,  # 设置为很大的值，基本无限制
-        temperature=0.6,
-        top_p=0.9,
+        max_new_tokens=512,  # 优化：进一步降低到512，大幅提升速度（约500-700字足够）
+        temperature=0.0,  # 优化：使用greedy decoding（最快）
+        top_p=0.9,  # greedy时top_p会被忽略
         system_prompt=system_prompt,
         assistant_role=assistant_role
     )
     
-    logger.info(f"[旧格式] 生成回复长度: {len(response)}")
-    logger.info(f"[旧格式] 生成回复预览: {response[:200]}...")
+    elapsed_time = time.time() - start_time
+    tokens_per_sec = len(response) / 3 / elapsed_time if elapsed_time > 0 else 0  # 粗略估算
+    logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
+    
+    logger.debug(f"[旧格式] 生成回复长度: {len(response)}")
     
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
@@ -771,9 +809,10 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     return base_prompt
 
 
-def format_context_to_messages(context):
+def format_context_to_messages(context, max_messages=6):
     """
     将训练数据格式的context（用\n分隔的对话）转换为消息格式
+    优化：限制消息数量以减少输入长度，加快生成速度
     
     输入格式：
     "审判员: 现在开庭...\n公诉人: 根据起诉书...\n辩护人: 我方认为..."
@@ -786,12 +825,21 @@ def format_context_to_messages(context):
         {"role": "assistant", "content": "公诉人：根据起诉书..."},
         {"role": "user", "content": "辩护人：我方认为..."}
     ]
+    
+    Args:
+        context: 对话历史文本
+        max_messages: 最大消息数量（默认6，只保留最近的对话）
     """
     if not context:
         return []
     
     messages = []
     lines = context.strip().split('\n')
+    
+    # 优化：只保留最近的消息，减少输入长度
+    if len(lines) > max_messages:
+        logger.debug(f"[优化] 对话历史过长({len(lines)}条)，截断为最近{max_messages}条")
+        lines = lines[-max_messages:]
     
     for i, line in enumerate(lines):
         line = line.strip()
@@ -815,7 +863,7 @@ def format_context_to_messages(context):
         
         # 确定消息角色（交替使用user和assistant）
         # 第一条消息通常是user，后续交替
-        if i == 0:
+        if len(messages) == 0:
             msg_role = 'user'
         else:
             # 根据前一条消息的角色决定

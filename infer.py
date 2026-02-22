@@ -303,32 +303,28 @@ def generate_with_retries(
         top_p=top_p,
     )
     
-    # 记录原始生成内容（用于调试）
+    # 记录原始生成内容（优化：减少日志输出，改为debug级别）
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"[生成调试] 原始生成内容长度: {len(ans)}")
-    logger.info(f"[生成调试] 原始生成内容预览: {ans[:300]}...")
+    logger.debug(f"[生成调试] 原始生成内容长度: {len(ans)}")
     
     # 尝试提取 <final> 标签中的内容
     final = extract_final(ans)
     if final:
-        logger.info(f"[生成调试] 提取到final标签，内容长度: {len(final)}")
-        logger.info(f"[生成调试] final内容预览: {final[:300]}...")
+        logger.debug(f"[生成调试] 提取到final标签，内容长度: {len(final)}")
         # 去除角色前缀（因为系统提示词要求输出时包含角色前缀，但前端会自己添加）
         cleaned = remove_role_prefix(final, assistant_role)
         # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
         cleaned = clean_special_tokens(cleaned)
-        logger.info(f"[生成调试] 去除角色前缀和特殊标记后长度: {len(cleaned)}")
-        logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
+        logger.debug(f"[生成调试] 最终返回内容长度: {len(cleaned)}")
         return cleaned
     
     # 如果没有 final 标签，尝试去除角色前缀后返回原始输出
-    logger.info(f"[生成调试] 未找到final标签，使用原始输出")
+    logger.debug(f"[生成调试] 未找到final标签，使用原始输出")
     cleaned = remove_role_prefix(ans, assistant_role)
     # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
     cleaned = clean_special_tokens(cleaned)
-    logger.info(f"[生成调试] 去除角色前缀和特殊标记后长度: {len(cleaned)}")
-    logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
+    logger.debug(f"[生成调试] 最终返回内容长度: {len(cleaned)}")
     return cleaned
 
 
@@ -405,24 +401,35 @@ def generate_one(
             attention_mask = attention_mask.to(device)
 
     with torch.inference_mode():
-        # 准备生成参数
+        # 准备生成参数（优化：加快生成速度）
+        # 如果temperature很低，使用greedy decoding（最快）
+        use_greedy = temperature <= 0.1
+        
         generation_kwargs = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "max_new_tokens": max_new_tokens,
-            "do_sample": temperature > 0,
-            "temperature": temperature if temperature > 0 else None,
-            "top_p": top_p,
+            "do_sample": not use_greedy and temperature > 0,  # 低temperature时使用greedy
+            "temperature": temperature if (not use_greedy and temperature > 0) else None,
+            "top_p": top_p if not use_greedy else None,  # greedy时不需要top_p
             "pad_token_id": tokenizer.eos_token_id,
             "eos_token_id": tokenizer.eos_token_id,
             "use_cache": True,  # 启用KV缓存，显著提升速度
-            "repetition_penalty": 1.1,  # 避免重复生成
+            "repetition_penalty": 1.05 if use_greedy else 1.1,  # greedy时降低惩罚
+            # 优化：使用更快的生成策略
+            "num_beams": 1,  # 禁用beam search，使用greedy decoding更快
         }
         
-        # 对于量化模型，使用torch.cuda.amp.autocast可能有助于性能
+        # 对于量化模型，使用torch.amp.autocast可能有助于性能（修复警告）
         if torch.cuda.is_available() and device.type == 'cuda':
-            with torch.cuda.amp.autocast():
-                output_ids = model.generate(**generation_kwargs)
+            # 使用新的API避免警告
+            try:
+                with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
+                    output_ids = model.generate(**generation_kwargs)
+            except AttributeError:
+                # 兼容旧版本
+                with torch.cuda.amp.autocast():
+                    output_ids = model.generate(**generation_kwargs)
         else:
             output_ids = model.generate(**generation_kwargs)
 
@@ -431,12 +438,11 @@ def generate_one(
     # 这样可以避免 < 字符被错误处理
     decoded = tokenizer.decode(new_tokens, skip_special_tokens=False).strip()
     
-    # 记录生成信息（用于调试）
+    # 记录生成信息（优化：减少日志输出，改为debug级别）
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
-    logger.info(f"[生成调试] 解码后内容长度: {len(decoded)}")
-    logger.info(f"[生成调试] 解码后内容预览: {decoded[:300]}...")
+    logger.debug(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
+    logger.debug(f"[生成调试] 解码后内容长度: {len(decoded)}")
     
     # 检查是否包含 <final> 标签，如果没有则检查是否有 final>（可能是生成错误）
     if "<final>" not in decoded and "final>" in decoded:

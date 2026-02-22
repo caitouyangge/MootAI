@@ -57,33 +57,8 @@ public class AiService {
             
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
             
-            // 输出详细的输入参数日志
-            log.info("========== 调用AI服务：生成法庭辩论回复 ==========");
-            log.info("URL: {}", url);
-            log.info("用户身份: {}", userIdentity);
-            log.info("当前角色: {}", currentRole);
-            log.info("法官类型: {}", judgeType);
-            log.info("案件描述长度: {} 字符", caseDescription != null ? caseDescription.length() : 0);
-            log.info("对话历史消息数: {}", messages != null ? messages.size() : 0);
-            if (messages != null && !messages.isEmpty()) {
-                log.info("对话历史预览（前3条）:");
-                for (int i = 0; i < Math.min(3, messages.size()); i++) {
-                    Map<String, Object> msg = messages.get(i);
-                    Object textObj = msg.get("text");
-                    String textPreview = "";
-                    if (textObj != null) {
-                        String text = textObj.toString();
-                        if (text.length() > 100) {
-                            textPreview = text.substring(0, 100) + "...";
-                        } else {
-                            textPreview = text;
-                        }
-                    }
-                    log.info("  [{}] {}: {}", i + 1, msg.get("name"), textPreview);
-                }
-            }
-            log.info("转换后的请求体（训练数据格式）: {}", objectMapper.writeValueAsString(requestBody));
-            log.info("================================================");
+            // 输出简化的日志（优化：减少日志输出以提升性能）
+            log.debug("调用AI服务生成回复 - 角色: {}, 消息数: {}", currentRole, messages != null ? messages.size() : 0);
             
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
             
@@ -102,7 +77,7 @@ public class AiService {
                     }
                     
                     if (aiResponse != null) {
-                        log.info("AI服务返回: {}", aiResponse.length() > 100 ? aiResponse.substring(0, 100) + "..." : aiResponse);
+                        log.debug("AI服务返回成功，长度: {}", aiResponse.length());
                         return aiResponse;
                     } else {
                         log.error("AI服务返回成功，但data和response字段都为空。响应体: {}", body);
