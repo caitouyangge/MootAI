@@ -195,6 +195,36 @@ def extract_final(text: str) -> Optional[str]:
     return None
 
 
+def clean_special_tokens(text: str) -> str:
+    """
+    清理文本中的特殊标记（如 <|im_end|>, <|im_start|> 等）
+    
+    Args:
+        text: 原始文本
+    
+    Returns:
+        清理后的文本
+    """
+    if not text:
+        return text
+    
+    # 移除所有特殊标记
+    special_tokens = [
+        '<|im_end|>',
+        '<|im_start|>',
+        '<|im_end|',
+        '<|im_start|',
+        '|im_end|>',
+        '|im_start|>',
+    ]
+    
+    cleaned = text
+    for token in special_tokens:
+        cleaned = cleaned.replace(token, '')
+    
+    return cleaned.strip()
+
+
 def remove_role_prefix(text: str, role: str = "") -> str:
     """
     去除文本开头的角色前缀
@@ -271,14 +301,18 @@ def generate_with_retries(
         logger.info(f"[生成调试] final内容预览: {final[:300]}...")
         # 去除角色前缀（因为系统提示词要求输出时包含角色前缀，但前端会自己添加）
         cleaned = remove_role_prefix(final, assistant_role)
-        logger.info(f"[生成调试] 去除角色前缀后长度: {len(cleaned)}")
+        # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
+        cleaned = clean_special_tokens(cleaned)
+        logger.info(f"[生成调试] 去除角色前缀和特殊标记后长度: {len(cleaned)}")
         logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
         return cleaned
     
     # 如果没有 final 标签，尝试去除角色前缀后返回原始输出
     logger.info(f"[生成调试] 未找到final标签，使用原始输出")
     cleaned = remove_role_prefix(ans, assistant_role)
-    logger.info(f"[生成调试] 去除角色前缀后长度: {len(cleaned)}")
+    # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
+    cleaned = clean_special_tokens(cleaned)
+    logger.info(f"[生成调试] 去除角色前缀和特殊标记后长度: {len(cleaned)}")
     logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
     return cleaned
 

@@ -47,6 +47,36 @@ EXTERNAL_AI_BASE_URL = "https://chatapi.zjt66.top/v1"
 EXTERNAL_AI_MODEL = "gpt-4o-mini"
 
 
+def clean_special_tokens(text: str) -> str:
+    """
+    清理文本中的特殊标记（如 <|im_end|>, <|im_start|> 等）
+    
+    Args:
+        text: 原始文本
+    
+    Returns:
+        清理后的文本
+    """
+    if not text:
+        return text
+    
+    # 移除所有特殊标记
+    special_tokens = [
+        '<|im_end|>',
+        '<|im_start|>',
+        '<|im_end|',
+        '<|im_start|',
+        '|im_end|>',
+        '|im_start|>',
+    ]
+    
+    cleaned = text
+    for token in special_tokens:
+        cleaned = cleaned.replace(token, '')
+    
+    return cleaned.strip()
+
+
 def resolve_model_path(adapter_dir: str) -> str:
     """解析模型路径，支持相对路径和绝对路径"""
     # 如果是绝对路径，直接返回
@@ -433,8 +463,11 @@ def generate():
             assistant_role=assistant_role
         )
         
+        # 清理特殊标记
+        cleaned_response = clean_special_tokens(response)
+        
         return jsonify({
-            'response': response,
+            'response': cleaned_response,
             'success': True
         })
     
@@ -474,8 +507,11 @@ def chat():
             assistant_role=assistant_role
         )
         
+        # 清理特殊标记
+        cleaned_response = clean_special_tokens(response)
+        
         return jsonify({
-            'response': response,
+            'response': cleaned_response,
             'success': True
         })
     
@@ -586,9 +622,12 @@ def debate_generate_training_format(data):
     logger.info(f"[训练格式] 生成回复长度: {len(response)}")
     logger.info(f"[训练格式] 生成回复预览: {response[:200]}...")
     
+    # 清理特殊标记
+    cleaned_response = clean_special_tokens(response)
+    
     return jsonify({
         'code': 200,
-        'data': response,
+        'data': cleaned_response,
         'role': agent_role,
         'success': True
     })
@@ -646,9 +685,12 @@ def debate_generate_legacy_format(data):
     logger.info(f"[旧格式] 生成回复长度: {len(response)}")
     logger.info(f"[旧格式] 生成回复预览: {response[:200]}...")
     
+    # 清理特殊标记
+    cleaned_response = clean_special_tokens(response)
+    
     return jsonify({
         'code': 200,
-        'data': response,
+        'data': cleaned_response,
         'role': current_role,
         'success': True
     })
@@ -703,7 +745,20 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     base_prompt += "1. 根据对话历史理解当前辩论阶段和焦点\n"
     base_prompt += "2. 根据角色标记（审判员/公诉人/辩护人/原告/被告）切换相应的语言风格\n"
     base_prompt += "3. 遵循法庭辩论的逻辑顺序和程序规范\n"
-    base_prompt += "4. 基于事实和法律条文进行专业辩论"
+    base_prompt += "4. 基于事实和法律条文进行专业辩论\n\n"
+    
+    # 5. 添加重要的角色约束（防止将案件背景中的实体误认为法庭角色）
+    base_prompt += "【重要约束】\n"
+    base_prompt += "1. 法庭辩论中只有以下角色可以发言：\n"
+    base_prompt += "   - 审判员（主持庭审）\n"
+    base_prompt += "   - 原告（原告代理律师）\n"
+    base_prompt += "   - 被告（被告代理律师）\n"
+    base_prompt += "2. 案件背景中可能包含各种实体名称（如机构名称、公司名称、个人姓名等），\n"
+    base_prompt += "   但这些不是法庭角色，不能作为发言人的身份。\n"
+    base_prompt += "3. 当需要指定下一个发言人时，只能使用\"原告\"或\"被告\"，不能使用案件背景中的其他名称。\n"
+    if agent_role == '审判员':
+        base_prompt += "4. 作为审判员，当你指定下一个发言人时，必须明确使用\"请原告继续\"或\"请被告继续\"，\n"
+        base_prompt += "   绝对不能使用案件背景中的机构名称、公司名称等作为发言人身份。\n"
     
     return base_prompt
 

@@ -260,7 +260,8 @@ public class AiService {
             instruction.append("5. 基于事实和法律进行判断，不偏不倚\n");
             instruction.append("6. 在开庭时必须发言引导原告发言\n");
             instruction.append("7. 每发言一轮后，判断自己是否应该发言。如果发言，发言完应该决定下一个发言人的身份（原告或被告）\n");
-            instruction.append("8. 如果不需要发言，由原告和被告方律师轮流发言");
+            instruction.append("8. 如果不需要发言，由原告和被告方律师轮流发言\n");
+            instruction.append("9. 【重要】法庭辩论中只有\"审判员\"、\"原告\"、\"被告\"三个角色可以发言。案件背景中可能包含各种实体名称（如机构名称、公司名称等），但这些不是法庭角色，不能作为发言人的身份。当你指定下一个发言人时，必须明确使用\"请原告继续\"或\"请被告继续\"，绝对不能使用案件背景中的机构名称、公司名称等作为发言人身份。");
         } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
             // 原告角色的instruction
             instruction.append("作为原告代理律师，你需要：\n");
