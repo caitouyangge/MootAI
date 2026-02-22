@@ -52,13 +52,27 @@ public class CaseController {
      * 创建案件
      */
     @PostMapping
-    public ApiResponse<Case> createCase(@Valid @RequestBody CaseRequest request) {
+    public ApiResponse<Case> createCase(@RequestBody CaseRequest request) {
         try {
             // 从JWT token中获取用户ID（需要实现JWT解析）
             // 暂时使用固定值，后续需要从token中解析
             Long userId = getCurrentUserId();
             Case caseEntity = caseService.createCase(userId, request);
             return ApiResponse.success("案件创建成功", caseEntity);
+        } catch (Exception e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+    
+    /**
+     * 更新案件
+     */
+    @PutMapping("/{id}")
+    public ApiResponse<Case> updateCase(@PathVariable Long id, @RequestBody CaseRequest request) {
+        try {
+            Long userId = getCurrentUserId();
+            Case caseEntity = caseService.updateCase(id, userId, request);
+            return ApiResponse.success("案件更新成功", caseEntity);
         } catch (Exception e) {
             return ApiResponse.error(e.getMessage());
         }
@@ -346,6 +360,16 @@ public class CaseController {
                 throw new RuntimeException("用户不存在");
             }
         }
+        
+        // 开发模式：如果未认证，使用默认用户ID（1）
+        String devMode = System.getenv("DEV_MODE");
+        boolean isDevMode = "true".equalsIgnoreCase(devMode) || 
+                           "true".equalsIgnoreCase(System.getProperty("dev.mode"));
+        if (isDevMode) {
+            log.warn("开发模式：未认证请求，使用默认用户ID 1");
+            return 1L; // 默认用户ID
+        }
+        
         throw new RuntimeException("未认证");
     }
 }

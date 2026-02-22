@@ -121,6 +121,11 @@ onMounted(() => {
       username.value = e.newValue || ''
     }
   })
+  
+  // 监听显示登录弹窗事件
+  window.addEventListener('show-login', () => {
+    showLogin.value = true
+  })
 })
 </script>
 

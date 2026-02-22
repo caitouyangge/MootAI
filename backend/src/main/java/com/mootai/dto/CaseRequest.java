@@ -1,21 +1,21 @@
 package com.mootai.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
 public class CaseRequest {
     
-    @NotBlank(message = "身份不能为空")
-    private String identity; // "plaintiff" 或 "defendant"
+    private String identity; // "plaintiff" 或 "defendant"（逐步保存时可能为空）
     
-    @NotNull(message = "文件列表不能为空")
-    private List<String> fileNames; // 文件名列表
+    private List<String> fileNames; // 文件名列表（逐步保存时可能为空）
     
-    @NotBlank(message = "案件描述不能为空")
-    private String caseDescription; // 案件描述
+    private String caseDescription; // 案件描述（逐步保存时可能为空）
+    
+    private String judgeType; // 法官类型（可选）
+    
+    private String opponentStrategy; // 对方AI律师的辩论策略（可选）
 }
 

@@ -46,6 +46,32 @@ public class DebateController {
     }
     
     /**
+     * 初始化AI模型
+     */
+    @PostMapping("/model/init")
+    public ApiResponse<Map<String, Object>> initModel() {
+        try {
+            Map<String, Object> result = aiService.initModel();
+            return ApiResponse.success("模型初始化已启动", result);
+        } catch (Exception e) {
+            return ApiResponse.error("模型初始化失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取模型初始化状态
+     */
+    @GetMapping("/model/status")
+    public ApiResponse<Map<String, Object>> getModelStatus() {
+        try {
+            Map<String, Object> status = aiService.getModelStatus();
+            return ApiResponse.success("获取状态成功", status);
+        } catch (Exception e) {
+            return ApiResponse.error("获取模型状态失败: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 生成判决书
      */
     @PostMapping("/verdict")

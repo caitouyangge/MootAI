@@ -62,7 +62,22 @@
     <div class="debate-chat-section">
       <h3 class="section-title">庭审现场</h3>
       <div class="chat-container" ref="chatContainer">
-        <div v-if="messages.length === 0" class="empty-tip">
+        <!-- 模型初始化提示 -->
+        <div v-if="modelInitializing || (modelInitProgress && !modelLoaded)" class="model-init-progress">
+          <div class="progress-content">
+            <el-icon class="is-loading progress-icon"><Loading /></el-icon>
+            <div class="progress-text">
+              <div class="progress-title">正在初始化AI模型...</div>
+              <div class="progress-message">{{ modelInitProgress || '请稍候，模型正在加载中...' }}</div>
+              <div class="progress-tip">首次加载可能需要几分钟时间，请耐心等待</div>
+            </div>
+          </div>
+          <div v-if="modelInitError" class="progress-error">
+            <el-icon><Warning /></el-icon>
+            <span>初始化失败: {{ modelInitError }}</span>
+          </div>
+        </div>
+        <div v-else-if="messages.length === 0" class="empty-tip">
           <p>请点击"开始庭审"按钮开始模拟法庭辩论</p>
         </div>
         <div
@@ -229,9 +244,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Loading, Warning } from '@element-plus/icons-vue'
 import { useCaseStore } from '@/stores/case'
 import request from '@/utils/request'
 
@@ -336,6 +352,14 @@ watch(opponentStrategy, () => {
 const messages = ref([])
 const debateCompleted = ref(false)
 const chatContainer = ref(null)
+
+// 模型初始化状态
+const modelInitializing = ref(false)
+const modelLoaded = ref(false)
+const modelInitProgress = ref('')
+const modelInitProgressSteps = ref([])
+const modelInitError = ref(null)
+const modelStatusPollTimer = ref(null)
 
 // 编辑相关
 const editingIndex = ref(-1)
@@ -775,8 +799,87 @@ const generateVerdict = () => {
 }
 
 // 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
+// 初始化模型
+const initModel = async () => {
+  try {
+    // 检查模型是否已加载
+    const statusRes = await request.get('/debate/model/status')
+    if (statusRes.code === 200 && statusRes.data?.loaded) {
+      modelLoaded.value = true
+      modelInitializing.value = false
+      return
+    }
+    
+    // 启动模型初始化
+    modelInitializing.value = true
+    modelLoaded.value = false
+    modelInitError.value = null
+    modelInitProgress.value = '正在启动模型初始化...'
+    
+    const initRes = await request.post('/debate/model/init')
+    if (initRes.code === 200) {
+      // 开始轮询状态
+      pollModelStatus()
+    } else {
+      throw new Error(initRes.message || '初始化失败')
+    }
+  } catch (error) {
+    console.error('模型初始化失败:', error)
+    modelInitError.value = error.message || '初始化失败'
+    modelInitializing.value = false
+  }
+}
+
+// 轮询模型状态
+const pollModelStatus = () => {
+  if (modelStatusPollTimer.value) {
+    clearInterval(modelStatusPollTimer.value)
+  }
+  
+  modelStatusPollTimer.value = setInterval(async () => {
+    try {
+      const statusRes = await request.get('/debate/model/status')
+      if (statusRes.code === 200 && statusRes.data) {
+        const status = statusRes.data
+        
+        modelInitProgress.value = status.progress || ''
+        modelInitProgressSteps.value = status.progress_steps || []
+        modelInitError.value = status.error || null
+        
+        if (status.loaded) {
+          modelLoaded.value = true
+          modelInitializing.value = false
+          if (modelStatusPollTimer.value) {
+            clearInterval(modelStatusPollTimer.value)
+            modelStatusPollTimer.value = null
+          }
+          ElMessage.success('AI模型初始化完成')
+        } else if (status.error) {
+          modelInitializing.value = false
+          if (modelStatusPollTimer.value) {
+            clearInterval(modelStatusPollTimer.value)
+            modelStatusPollTimer.value = null
+          }
+        }
+      }
+    } catch (error) {
+      console.error('获取模型状态失败:', error)
+    }
+  }, 1000) // 每秒轮询一次
+}
+
+// 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
 onMounted(() => {
-  // 可以在这里添加自动开始逻辑
+  // 进入辩论阶段时，自动初始化模型
+  initModel()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (modelStatusPollTimer.value) {
+    clearInterval(modelStatusPollTimer.value)
+    modelStatusPollTimer.value = null
+  }
 })
 </script>
 
@@ -992,6 +1095,71 @@ onMounted(() => {
   height: 200px;
   color: #999;
   font-size: 6px;
+}
+
+/* 模型初始化进度 */
+.model-init-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.progress-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.progress-icon {
+  font-size: 32px;
+  color: #409eff;
+  flex-shrink: 0;
+}
+
+.progress-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progress-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.progress-message {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.progress-tip {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #909399;
+  font-style: italic;
+}
+
+.progress-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #fef0f0;
+  border: 1px solid #fde2e2;
+  border-radius: 6px;
+  color: #f56c6c;
+  font-size: 14px;
 }
 
 .message-item {

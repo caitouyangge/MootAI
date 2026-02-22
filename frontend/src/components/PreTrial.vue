@@ -67,10 +67,10 @@
           <div 
             class="upload-area" 
             @click="triggerUpload" 
-            @drop="handleDrop"
-            @dragover="handleDragOver"
-            @dragenter="handleDragEnter"
-            @dragleave="handleDragLeave"
+            @drop.prevent="handleDrop"
+            @dragover.prevent="handleDragOver"
+            @dragenter.prevent="handleDragEnter"
+            @dragleave.prevent="handleDragLeave"
             :class="{ 
               'has-files': fileList.length > 0,
               'dragging': isDragging
@@ -333,9 +333,13 @@ const completeStep = async (stepKey) => {
   stepStatus.value[stepKey] = true
   saveStepStatus()
   
+  // 在每一步完成后都尝试保存到数据库（逐步保存）
+  // 使用 force=true 允许部分信息保存
+  await saveCase(true)
+  
   // 如果是完成最后一步（选择策略），直接完成整个流程
   if (stepKey === 'strategy') {
-    // 所有步骤完成，保存案件信息并触发完成事件
+    // 所有步骤完成，再次保存确保所有信息都保存
     await saveCase()
     emit('complete')
     ElMessage.success('庭前准备已完成！')
@@ -358,40 +362,70 @@ const completeStep = async (stepKey) => {
   }
 }
 
-// 保存案件信息
-const saveCase = async () => {
-  if (!selectedIdentity.value || fileList.value.length === 0 || !caseDescription.value || !selectedJudgeType.value || !selectedOpponentStrategy.value) {
-    return
+// 保存案件信息到数据库（创建或更新）
+const saveCase = async (force = false) => {
+  // 如果强制保存，即使信息不完整也保存（用于逐步保存）
+  if (!force) {
+    // 只有在所有必要信息都完整时才保存
+    if (!selectedIdentity.value || fileList.value.length === 0 || !caseDescription.value || !selectedJudgeType.value || !selectedOpponentStrategy.value) {
+      return
+    }
   }
   
   try {
-    const fileNames = fileList.value.map(file => file.name)
-    const response = await request.post('/cases', {
-      identity: selectedIdentity.value,
+    const fileNames = fileList.value
+      .filter(file => file.uploaded) // 只保存已上传的文件
+      .map(file => file.name)
+    
+    // 如果没有已上传的文件，不保存
+    if (fileNames.length === 0 && !force) {
+      return
+    }
+    
+    const caseData = {
+      identity: selectedIdentity.value || '',
       fileNames: fileNames,
-      caseDescription: caseDescription.value,
-      judgeType: selectedJudgeType.value,
-      opponentStrategy: selectedOpponentStrategy.value
-    })
+      caseDescription: caseDescription.value || '',
+      judgeType: selectedJudgeType.value || '',
+      opponentStrategy: selectedOpponentStrategy.value || ''
+    }
+    
+    let response
+    if (caseStore.caseId) {
+      // 更新现有案件
+      response = await request.put(`/cases/${caseStore.caseId}`, caseData)
+    } else {
+      // 创建新案件
+      response = await request.post('/cases', caseData)
+    }
     
     if (response.code === 200) {
-      // 保存成功，可以在这里保存caseId到store或localStorage
+      // 保存成功，保存caseId到store
       if (response.data && response.data.id) {
         caseStore.setCaseId(response.data.id)
       }
+      return true
+    } else {
+      console.error('保存案件信息失败:', response.message)
+      return false
     }
   } catch (error) {
     console.error('保存案件信息失败:', error)
-    // 不显示错误，因为用户可能已经可以继续了
+    // 不显示错误，因为用户可能正在填写中
+    return false
   }
 }
 
 // 身份选择
 const selectedIdentity = ref(caseStore.selectedIdentity || '')
 
-const selectIdentity = (identity) => {
+const selectIdentity = async (identity) => {
   selectedIdentity.value = identity
   caseStore.setIdentity(identity)
+  // 选择身份后，如果有其他信息，保存到数据库
+  if (fileList.value.length > 0 || caseDescription.value) {
+    await saveCase(true)
+  }
 }
 
 // 文件上传
@@ -420,7 +454,10 @@ const handleDragEnter = (event) => {
   event.preventDefault()
   event.stopPropagation()
   dragCounter.value++
-  if (event.dataTransfer?.items && event.dataTransfer.items.length > 0) {
+  // 检查是否有文件被拖拽
+  const hasFiles = event.dataTransfer?.types?.includes('Files') || 
+                   (event.dataTransfer?.items && event.dataTransfer.items.length > 0)
+  if (hasFiles) {
     isDragging.value = true
   }
 }
@@ -429,7 +466,9 @@ const handleDragLeave = (event) => {
   event.preventDefault()
   event.stopPropagation()
   dragCounter.value--
-  if (dragCounter.value === 0) {
+  // 只有当计数器归零时才取消拖拽状态
+  if (dragCounter.value <= 0) {
+    dragCounter.value = 0
     isDragging.value = false
   }
 }
@@ -437,6 +476,7 @@ const handleDragLeave = (event) => {
 const handleDragOver = (event) => {
   event.preventDefault()
   event.stopPropagation()
+  // 设置拖拽效果
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'copy'
   }
@@ -445,12 +485,18 @@ const handleDragOver = (event) => {
 const handleDrop = async (event) => {
   event.preventDefault()
   event.stopPropagation()
+  
+  // 重置拖拽状态
   isDragging.value = false
   dragCounter.value = 0
   
-  const files = Array.from(event.dataTransfer.files)
+  // 获取文件
+  const files = Array.from(event.dataTransfer?.files || [])
+  
   if (files.length > 0) {
     await addFiles(files)
+  } else {
+    ElMessage.warning('未检测到文件，请重试')
   }
 }
 
@@ -529,6 +575,16 @@ const readFileContent = (file, fileObj) => {
 const uploadFiles = async () => {
   if (uploading.value) return
   
+  // 检查是否已登录
+  const token = localStorage.getItem('token')
+  if (!token) {
+    ElMessage.warning('请先登录后再上传文件')
+    // 触发登录弹窗（如果Layout组件支持）
+    const event = new CustomEvent('show-login')
+    window.dispatchEvent(event)
+    return
+  }
+  
   uploading.value = true
   
   try {
@@ -568,12 +624,27 @@ const uploadFiles = async () => {
       })
       caseStore.setFileList(fileList.value)
       ElMessage.success(`成功上传 ${filesToUpload.length} 个文件`)
+      // 文件上传成功后，保存到数据库
+      await saveCase(true)
     } else {
       throw new Error(response.message || '上传失败')
     }
   } catch (error) {
     console.error('文件上传失败:', error)
-    ElMessage.error(error.response?.data?.message || error.message || '文件上传失败，请重试')
+    
+    // 处理403错误（未认证）
+    if (error.response?.status === 403 || error.response?.status === 401) {
+      ElMessage.error('认证失败，请重新登录')
+      // 清除可能无效的token
+      localStorage.removeItem('token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('userId')
+      // 触发登录弹窗
+      const event = new CustomEvent('show-login')
+      window.dispatchEvent(event)
+    } else {
+      ElMessage.error(error.response?.data?.message || error.message || '文件上传失败，请重试')
+    }
     
     // 标记上传失败
     fileList.value.forEach(file => {
@@ -649,6 +720,8 @@ const generateDescription = async () => {
       caseDescription.value = response.data
       caseStore.setCaseDescription(response.data)
       ElMessage.success('案件描述已生成')
+      // 生成描述后，保存到数据库
+      await saveCase(true)
     } else {
       throw new Error(response.message || '生成案件描述失败')
     }
@@ -666,9 +739,17 @@ const generateDescription = async () => {
 }
 
 // 监听案件描述变化
-watch(caseDescription, (newVal) => {
+watch(caseDescription, async (newVal) => {
   if (newVal) {
     caseStore.setCaseDescription(newVal)
+    // 案件描述变化后，保存到数据库（延迟保存，避免频繁请求）
+    if (caseStore.caseId) {
+      // 使用防抖，避免频繁保存
+      clearTimeout(window.caseDescriptionSaveTimer)
+      window.caseDescriptionSaveTimer = setTimeout(async () => {
+        await saveCase(true)
+      }, 1000) // 1秒后保存
+    }
   }
 })
 
@@ -703,8 +784,10 @@ const judgeTypes = ref([
 
 const selectedJudgeType = ref(caseStore.selectedJudgeType || '')
 
-const onJudgeTypeChange = () => {
+const onJudgeTypeChange = async () => {
   caseStore.setJudgeType(selectedJudgeType.value)
+  // 选择法官类型后，保存到数据库
+  await saveCase(true)
 }
 
 const getJudgeLabel = (value) => {
@@ -771,13 +854,48 @@ const strategyOptions = ref([
 
 const selectedOpponentStrategy = ref(caseStore.opponentStrategy || '')
 
-const selectStrategy = (strategy) => {
+const selectStrategy = async (strategy) => {
   selectedOpponentStrategy.value = strategy
   caseStore.setOpponentStrategy(strategy)
+  // 选择策略后，保存到数据库
+  await saveCase(true)
 }
 
-// 组件挂载时，根据实际完成情况跳转到正确的步骤
-onMounted(() => {
+// 组件挂载时，从数据库加载案件信息
+onMounted(async () => {
+  // 如果有案件ID，从数据库加载案件信息
+  if (caseStore.caseId) {
+    console.log('[PreTrial] 从数据库加载案件信息，caseId:', caseStore.caseId)
+    const loaded = await caseStore.loadCaseFromDatabase(caseStore.caseId)
+    if (loaded) {
+      console.log('[PreTrial] 案件信息加载成功')
+      // 更新本地状态（从 store 恢复）
+      selectedIdentity.value = caseStore.selectedIdentity || ''
+      fileList.value = caseStore.fileList || []
+      caseDescription.value = caseStore.caseDescription || ''
+      selectedJudgeType.value = caseStore.selectedJudgeType || ''
+      selectedOpponentStrategy.value = caseStore.opponentStrategy || ''
+      
+      console.log('[PreTrial] 恢复的数据:', {
+        identity: selectedIdentity.value,
+        fileCount: fileList.value.length,
+        hasDescription: !!caseDescription.value,
+        judgeType: selectedJudgeType.value,
+        strategy: selectedOpponentStrategy.value
+      })
+    } else {
+      console.warn('[PreTrial] 案件信息加载失败')
+    }
+  } else {
+    console.log('[PreTrial] 没有 caseId，使用 store 中的初始值')
+    // 即使没有 caseId，也尝试从 store 恢复（可能来自其他页面）
+    selectedIdentity.value = caseStore.selectedIdentity || ''
+    fileList.value = caseStore.fileList || []
+    caseDescription.value = caseStore.caseDescription || ''
+    selectedJudgeType.value = caseStore.selectedJudgeType || ''
+    selectedOpponentStrategy.value = caseStore.opponentStrategy || ''
+  }
+  
   // 检查每个步骤是否真正完成（不仅仅是可访问）
   // 1. identity 步骤：检查是否选择了身份
   const hasIdentity = selectedIdentity.value && selectedIdentity.value !== ''
@@ -998,6 +1116,10 @@ onMounted(() => {
   transition: all 0.3s;
   background: #fafafa;
   margin-bottom: 12px;
+  position: relative;
+  /* 确保可以接收拖拽事件 */
+  pointer-events: auto;
+  user-select: none;
 }
 
 .upload-area:hover {
@@ -1025,6 +1147,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
+  pointer-events: none; /* 占位符不拦截事件 */
 }
 
 .upload-icon {
@@ -1048,6 +1171,7 @@ onMounted(() => {
 
 .file-preview {
   width: 100%;
+  pointer-events: none; /* 文件预览不拦截拖拽事件 */
 }
 
 .file-count {

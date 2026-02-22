@@ -279,6 +279,53 @@ public class AiService {
     }
     
     /**
+     * 初始化AI模型（后台异步加载）
+     */
+    public Map<String, Object> initModel() {
+        try {
+            String url = aiServiceUrl + "/api/model/init";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(new HashMap<>(), headers);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            } else {
+                throw new RuntimeException("模型初始化请求失败");
+            }
+        } catch (Exception e) {
+            log.error("模型初始化失败", e);
+            throw new RuntimeException("模型初始化失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 获取模型初始化状态
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getModelStatus() {
+        try {
+            String url = aiServiceUrl + "/api/model/status";
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // AI服务返回格式: {"success": true, "status": {...}}
+                // 我们需要提取status字段
+                if (body.containsKey("status")) {
+                    return (Map<String, Object>) body.get("status");
+                }
+                return body;
+            } else {
+                throw new RuntimeException("获取模型状态失败");
+            }
+        } catch (Exception e) {
+            log.error("获取模型状态失败", e);
+            throw new RuntimeException("获取模型状态失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
      * 案件资料自动总结
      * 
      * @param fileNames 文件名列表

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -19,9 +20,37 @@ public class CaseService {
     public Case createCase(Long userId, CaseRequest request) {
         Case caseEntity = new Case();
         caseEntity.setUserId(userId);
-        caseEntity.setIdentity(request.getIdentity());
-        caseEntity.setCaseDescription(request.getCaseDescription());
-        caseEntity.setFileNames(request.getFileNames());
+        
+        // 设置字段，允许为空（逐步保存时可能部分字段为空）
+        caseEntity.setIdentity(request.getIdentity() != null ? request.getIdentity() : "");
+        caseEntity.setCaseDescription(request.getCaseDescription() != null ? request.getCaseDescription() : "");
+        caseEntity.setFileNames(request.getFileNames() != null ? request.getFileNames() : new ArrayList<>());
+        caseEntity.setJudgeType(request.getJudgeType());
+        caseEntity.setOpponentStrategy(request.getOpponentStrategy());
+        
+        return caseRepository.save(caseEntity);
+    }
+    
+    @Transactional
+    public Case updateCase(Long caseId, Long userId, CaseRequest request) {
+        Case caseEntity = caseRepository.findByIdAndUserId(caseId, userId);
+        if (caseEntity == null) {
+            throw new RuntimeException("案件不存在或无权限访问");
+        }
+        
+        // 更新字段（允许空字符串，用于逐步保存）
+        if (request.getIdentity() != null) {
+            caseEntity.setIdentity(request.getIdentity());
+        }
+        if (request.getCaseDescription() != null) {
+            caseEntity.setCaseDescription(request.getCaseDescription());
+        }
+        if (request.getFileNames() != null) {
+            caseEntity.setFileNames(request.getFileNames());
+        }
+        // judgeType 和 opponentStrategy 允许设置为 null（如果前端发送 null）
+        caseEntity.setJudgeType(request.getJudgeType());
+        caseEntity.setOpponentStrategy(request.getOpponentStrategy());
         
         return caseRepository.save(caseEntity);
     }

@@ -34,6 +34,12 @@ public class Case {
     @Column(name = "file_name")
     private List<String> fileNames = new ArrayList<>();
     
+    @Column(name = "judge_type", length = 50)
+    private String judgeType; // 法官类型
+    
+    @Column(name = "opponent_strategy", length = 50)
+    private String opponentStrategy; // 对方AI律师的辩论策略
+    
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     

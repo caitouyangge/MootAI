@@ -31,13 +31,27 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 允许OPTIONS预检请求
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/cases/upload").authenticated() // 文件上传需要认证
-                .requestMatchers("/api/cases/**").authenticated() // 案件相关接口需要认证
-                .anyRequest().permitAll() // 允许其他请求，避免403错误
-            )
+            .authorizeHttpRequests(auth -> {
+                auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll(); // 允许OPTIONS预检请求
+                auth.requestMatchers("/api/auth/**").permitAll();
+                
+                // 开发模式：允许未认证的文件上传（通过环境变量控制）
+                String devMode = System.getenv("DEV_MODE");
+                boolean isDevMode = "true".equalsIgnoreCase(devMode) || 
+                                   "true".equalsIgnoreCase(System.getProperty("dev.mode"));
+                
+                if (isDevMode) {
+                    // 开发模式：允许未认证的文件上传
+                    auth.requestMatchers("/api/cases/upload").permitAll();
+                    auth.requestMatchers("/api/cases/**").permitAll();
+                } else {
+                    // 生产模式：需要认证
+                    auth.requestMatchers("/api/cases/upload").authenticated();
+                    auth.requestMatchers("/api/cases/**").authenticated();
+                }
+                
+                auth.anyRequest().permitAll(); // 允许其他请求，避免403错误
+            })
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
