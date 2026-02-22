@@ -174,16 +174,7 @@
       </div>
     </div>
     
-    <!-- 回到顶部按钮 -->
-    <transition name="fade">
-      <div 
-        v-show="showBackToTop" 
-        class="back-to-top" 
-        @click="scrollToTop"
-      >
-        <span class="back-icon">↑</span>
-      </div>
-    </transition>
+    
   </div>
 </template>
 
@@ -871,30 +862,8 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
-/* 回到顶部按钮 */
-.back-to-top {
-  position: fixed;
-  right: 32px;
-  bottom: 32px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
-  color: var(--text-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-lg);
-  transition: all var(--transition-base);
-  z-index: 1000;
-  border: 2px solid var(--bg-primary);
-}
 
-.back-to-top:hover {
-  transform: translateY(-5px) scale(1.1);
-  box-shadow: var(--shadow-xl);
-}
+
 
 .back-icon {
   font-size: 24px;

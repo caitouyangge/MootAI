@@ -340,10 +340,60 @@ body {
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   z-index: 2000 !important;
+  transform: none !important;
+  overflow: visible !important;
+  inset: 0 !important;
+  /* 确保不受任何父容器影响 */
+  contain: none !important;
+  isolation: isolate !important;
+}
+
+/* 确保遮罩层内容容器也覆盖整个视口 */
+.el-overlay__content {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: none !important;
+  overflow: visible !important;
+  inset: 0 !important;
+}
+
+/* 确保遮罩层可以覆盖 courtroom-wrapper */
+.courtroom-wrapper .el-overlay,
+.courtroom-page .el-overlay,
+.courtroom-wrapper .el-overlay__content,
+.courtroom-page .el-overlay__content {
+  position: fixed !important;
+  z-index: 2000 !important;
+  transform: none !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* 确保遮罩层内的容器也正确居中 */
