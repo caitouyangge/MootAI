@@ -677,12 +677,51 @@ const checkJudgeShouldSpeak = async () => {
   isGenerating.value = true
   currentSpeakingRole.value = '法官'
   
+  // 检查是否至少完成一轮（原告+被告）
+  // 硬性要求：必须确保双方已经进行了至少一轮完整的对话（原告发言+被告发言）
+  const lastNonJudgeMessages = messages.value.filter(m => m.role !== 'judge')
+  if (lastNonJudgeMessages.length === 0) {
+    console.log('[辩论流程] 没有非法官消息，跳过法官检查')
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+    await continueAlternatingDebate()
+    return
+  }
+  
+  const lastNonJudgeMessage = lastNonJudgeMessages[lastNonJudgeMessages.length - 1]
+  const secondLastNonJudgeMessage = lastNonJudgeMessages.length >= 2 ? lastNonJudgeMessages[lastNonJudgeMessages.length - 2] : null
+  
+  // 硬性要求：必须至少完成一轮（原告+被告）
+  // 如果最后一条是原告发言，说明被告还没有回复，此时不能介入
+  if (lastNonJudgeMessage.role === 'plaintiff') {
+    console.log('[辩论流程] 最后是原告发言，被告还没有回复，不满足硬性条件（至少完成一轮），跳过法官检查')
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+    await continueAlternatingDebate()
+    return
+  }
+  
+  // 如果最后一条是被告发言，需要检查前一条是否是原告发言
+  if (lastNonJudgeMessage.role === 'defendant') {
+    if (!secondLastNonJudgeMessage || secondLastNonJudgeMessage.role !== 'plaintiff') {
+      console.log('[辩论流程] 最后是被告发言，但前一条不是原告发言，不满足硬性条件（至少完成一轮），跳过法官检查')
+      isGenerating.value = false
+      currentSpeakingRole.value = ''
+      await continueAlternatingDebate()
+      return
+    }
+    // 如果最后是被告，前一条是原告，说明完成了一轮，可以判断
+    console.log('[辩论流程] 满足硬性条件（至少完成一轮：原告+被告），开始判断法官是否需要介入')
+  }
+  
   // 构建判断提示词
   const judgeCheckPrompt = `根据当前的庭审对话历史，请判断作为审判员，你是否需要发言。
 
 【重要】发言顺序：原告先发言，然后被告发言，每完成一轮（原告+被告）后，你判断是否需要介入。
 
-【介入条件】只有在以下情况才需要介入：
+【硬性要求】介入的硬性条件：必须确保双方已经进行了至少一轮完整的对话（原告发言+被告发言），否则绝对不能介入。如果对话历史中最后一条是原告发言，说明被告还没有回复，此时绝对不能介入，必须等待被告发言后再判断。
+
+【介入条件】只有在满足硬性条件（至少完成一轮）的前提下，且出现以下情况时才需要介入：
 - 需要归纳争议焦点时
 - 需要纠正程序错误时
 - 需要制止不当言论时
@@ -690,7 +729,7 @@ const checkJudgeShouldSpeak = async () => {
 - 辩论阶段结束时
 
 【重要原则】
-1. 非必要不介入，不说废话。如果双方辩论正常进行，没有程序问题，没有需要纠正的地方，就不要发言。
+1. 即使满足硬性条件和介入条件，也要尽量减少介入。非必要不介入，不说废话。如果双方辩论正常进行，没有程序问题，没有需要纠正的地方，就不要发言。
 2. 如果需要发言，发言内容必须简洁、专业、有针对性，不要说套话、空话。发言后必须明确指定下一个发言人的身份（"请原告继续"或"请被告继续"）。
 3. 如果不需要发言，请只输出"不需要发言"，然后由原告和被告继续轮流发言。`
   
