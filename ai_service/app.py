@@ -604,6 +604,8 @@ def debate_generate_legacy_format(data):
     check_mode = data.get('checkMode', False)  # 是否为判断模式
     prompt = data.get('prompt', '')  # 特殊提示词（用于判断模式）
     is_first_judge_speech = data.get('isFirstJudgeSpeech', False)  # 是否为首次法官发言
+    user_strategy = data.get('userStrategy', 'balanced')  # 用户策略（用于AI代理模式）
+    is_user_proxy = data.get('isUserProxy', False)  # 是否为用户代理模式
     
     if not user_identity or not current_role:
         return jsonify({'error': 'user_identity和current_role参数不能为空'}), 400
@@ -614,6 +616,10 @@ def debate_generate_legacy_format(data):
     
     # 构建系统提示词
     # case_description 现在可能包含完整的background（身份信息、文件列表、案件描述、诉讼策略等）
+    # 如果是用户代理模式，需要根据用户策略更新case_description中的策略信息
+    if is_user_proxy and user_strategy:
+        case_description = update_strategy_in_background(case_description, user_identity, user_strategy)
+    
     system_prompt = build_system_prompt(user_identity, current_role, judge_type, case_description)
     assistant_role = get_assistant_role_name(current_role)
     
@@ -814,6 +820,67 @@ def get_assistant_role_name(role):
         'defendant': '被告'
     }
     return role_map.get(role, '审判员')
+
+
+def update_strategy_in_background(background, user_identity, user_strategy):
+    """
+    更新background中的用户策略信息
+    
+    Args:
+        background: 原始background字符串
+        user_identity: 用户身份（'plaintiff' 或 'defendant'）
+        user_strategy: 用户选择的策略（'aggressive', 'conservative', 'balanced', 'defensive'）
+    
+    Returns:
+        更新后的background字符串
+    """
+    # 策略描述映射
+    strategy_descriptions = {
+        'aggressive': '激进策略：采取强硬立场，积极进攻，不轻易让步。主动质疑对方证据，强调己方优势，对争议点进行深入辩论。',
+        'conservative': '保守策略：优先考虑通过调解解决争议，主张较为温和，可适当让步。避免过度激化矛盾，保持协商空间。',
+        'balanced': '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。',
+        'defensive': '防御策略：重点防守，回应对方质疑，保护己方核心利益。谨慎应对争议点，避免主动进攻。'
+    }
+    
+    strategy_desc = strategy_descriptions.get(user_strategy, strategy_descriptions['balanced'])
+    
+    # 查找并替换策略部分
+    import re
+    
+    # 如果background中包含【诉讼策略】部分，更新对应角色的策略
+    if '【诉讼策略】' in background:
+        # 匹配策略部分
+        pattern = r'【诉讼策略】\n(.*?)(?=\n\n|$)'
+        match = re.search(pattern, background, re.DOTALL)
+        
+        if match:
+            strategy_section = match.group(1)
+            
+            # 根据用户身份更新策略
+            if user_identity == 'plaintiff':
+                # 更新原告策略
+                strategy_section = re.sub(
+                    r'原告策略：.*',
+                    f'原告策略：{strategy_desc}',
+                    strategy_section
+                )
+            else:
+                # 更新被告策略
+                strategy_section = re.sub(
+                    r'被告策略：.*',
+                    f'被告策略：{strategy_desc}',
+                    strategy_section
+                )
+            
+            # 替换整个策略部分
+            background = background.replace(match.group(0), f'【诉讼策略】\n{strategy_section}')
+    else:
+        # 如果不存在策略部分，添加策略部分
+        user_role_name = '原告' if user_identity == 'plaintiff' else '被告'
+        strategy_text = f'\n【诉讼策略】\n{user_role_name}策略：{strategy_desc}\n'
+        background += strategy_text
+    
+    return background
 
 
 def format_messages_for_ai(messages):

@@ -203,17 +203,59 @@
           </div>
         </div>
         
+        <!-- AI代理和策略选择 -->
+        <div v-if="isUserTurn" class="ai-proxy-section">
+          <div class="ai-proxy-switch">
+            <el-switch
+              v-model="useAiProxy"
+              active-text="使用AI代理"
+              inactive-text="手动输入"
+              size="default"
+            />
+          </div>
+          <div v-if="useAiProxy" class="strategy-selector">
+            <span class="strategy-label">回复策略：</span>
+            <el-select
+              v-model="userStrategy"
+              placeholder="请选择回复策略"
+              size="small"
+              style="width: 200px"
+            >
+              <el-option
+                v-for="(desc, key) in strategyDefinitions"
+                :key="key"
+                :label="getStrategyLabel(key)"
+                :value="key"
+              >
+                <div class="strategy-option">
+                  <div class="strategy-option-label">{{ getStrategyLabel(key) }}</div>
+                  <div class="strategy-option-desc">{{ desc }}</div>
+                </div>
+              </el-option>
+            </el-select>
+          </div>
+        </div>
+        
         <div class="input-wrapper">
           <el-input
             v-model="userInput"
             type="textarea"
             :rows="3"
-            :placeholder="isUserTurn ? `请输入您的发言（作为${userIdentity === 'plaintiff' ? '原告' : '被告'}）...` : '请等待其他角色发言...'"
+            :placeholder="isUserTurn ? (useAiProxy ? '点击AI生成发言按钮生成内容，确认后点击发送' : `请输入您的发言（作为${userIdentity === 'plaintiff' ? '原告' : '被告'}）...`) : '请等待其他角色发言...'"
             class="user-input"
             :disabled="!isUserTurn || isGenerating"
             @keydown.ctrl.enter="sendMessage"
           />
           <div class="input-actions">
+            <el-button
+              v-if="useAiProxy"
+              type="default"
+              :loading="isGenerating"
+              :disabled="!isUserTurn || isGenerating"
+              @click="generateUserAiResponse"
+            >
+              {{ isGenerating ? '生成中...' : 'AI生成发言' }}
+            </el-button>
             <el-button
               type="primary"
               :loading="isGenerating"
@@ -329,10 +371,27 @@ const strategyDefinitions = {
   defensive: '防御策略：重点防守，回应对方质疑，保护己方核心利益。谨慎应对争议点，避免主动进攻。'
 }
 
+// 策略标签映射
+const strategyLabels = {
+  aggressive: '激进策略',
+  conservative: '保守策略',
+  balanced: '均衡策略',
+  defensive: '防御策略'
+}
+
+// 获取策略标签
+const getStrategyLabel = (key) => {
+  return strategyLabels[key] || key
+}
+
 // 诉讼策略（根据用户身份和对方策略设置）
 const opponentStrategy = ref(caseStore.opponentStrategy || 'balanced')
 const plaintiffStrategy = ref('')
 const defendantStrategy = ref('')
+
+// AI代理相关
+const useAiProxy = ref(false) // 是否使用AI代理
+const userStrategy = ref('balanced') // 用户自己的策略
 
 // 根据用户身份和对方策略初始化策略
 const initStrategies = () => {
@@ -438,7 +497,12 @@ const startDebate = async () => {
 
 // 发送用户消息
 const sendMessage = async () => {
-  if (!userInput.value.trim() || isGenerating.value || !isUserTurn.value) {
+  if (isGenerating.value || !isUserTurn.value) {
+    return
+  }
+  
+  // 检查输入框是否有内容
+  if (!userInput.value.trim()) {
     return
   }
   
@@ -462,6 +526,61 @@ const sendMessage = async () => {
   // 如果法官发言，发言完应该决定下一个发言人的身份
   // 如果法官不发言，由原告和被告轮流发言
   await checkJudgeShouldSpeak()
+}
+
+// 生成用户AI代理回复（生成到输入框，不直接发送）
+const generateUserAiResponse = async () => {
+  if (isGenerating.value) return
+  
+  isGenerating.value = true
+  
+  // 更新当前发言角色为用户
+  const roleName = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  currentSpeakingRole.value = roleName
+  
+  try {
+    // 准备消息历史
+    const messageHistory = messages.value.map(msg => ({
+      role: msg.role,
+      name: msg.name,
+      text: msg.text
+    }))
+    
+    // 构建完整的background（包含所有庭前准备资料）
+    const background = buildBackground()
+    
+    const response = await request.post('/debate/generate', {
+      userIdentity: userIdentity.value,
+      currentRole: userIdentity.value, // 用户自己的角色
+      messages: messageHistory,
+      judgeType: selectedJudgeType.value || 'neutral',
+      caseDescription: background,
+      userStrategy: userStrategy.value || 'balanced', // 用户策略
+      isUserProxy: true // 标记为用户代理模式
+    }, {
+      timeout: 0
+    })
+    
+    if (response.code === 200 && response.data) {
+      const aiText = response.data
+      
+      // 将生成的文本放入输入框，让用户确认后再发送
+      userInput.value = aiText
+      
+      // 用户发言结束
+      currentSpeakingRole.value = ''
+      
+      ElMessage.success('AI已生成发言内容，请确认后点击发送')
+    } else {
+      ElMessage.error(response.message || 'AI生成失败')
+    }
+  } catch (error) {
+    console.error('生成用户AI回复失败:', error)
+    ElMessage.error('生成失败，请重试: ' + (error.message || '未知错误'))
+  } finally {
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+  }
 }
 
 // 构建完整的background参数（包含庭前准备的所有资料）
@@ -493,11 +612,19 @@ const buildBackground = () => {
   // 4. 诉讼策略
   background += `【诉讼策略】\n`
   if (userIdentity.value === 'plaintiff') {
-    background += `原告策略：${plaintiffStrategy.value}\n`
+    // 如果用户使用AI代理，使用用户选择的策略；否则使用默认策略
+    const userStrategyDesc = useAiProxy.value && userStrategy.value 
+      ? strategyDefinitions[userStrategy.value] 
+      : plaintiffStrategy.value
+    background += `原告策略：${userStrategyDesc}\n`
     background += `被告策略：${defendantStrategy.value}\n`
   } else {
-    background += `被告策略：${defendantStrategy.value}\n`
+    // 如果用户使用AI代理，使用用户选择的策略；否则使用默认策略
+    const userStrategyDesc = useAiProxy.value && userStrategy.value 
+      ? strategyDefinitions[userStrategy.value] 
+      : defendantStrategy.value
     background += `原告策略：${plaintiffStrategy.value}\n`
+    background += `被告策略：${userStrategyDesc}\n`
   }
   
   return background
@@ -1722,6 +1849,49 @@ onUnmounted(() => {
   margin-top: 15px;
   padding-top: 15px;
   border-top: 1px solid #e0e0e0;
+}
+
+/* AI代理和策略选择 */
+.ai-proxy-section {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.ai-proxy-switch {
+  margin-bottom: 10px;
+}
+
+.strategy-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.strategy-label {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.strategy-option {
+  padding: 4px 0;
+}
+
+.strategy-option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.strategy-option-desc {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
 }
 
 /* 发言状态提示 */
