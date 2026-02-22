@@ -519,13 +519,9 @@ const sendMessage = async () => {
   currentSpeakingRole.value = ''
   
   // 生成对方律师的回复
+  // 传递 shouldCheckJudgeAfter=true，让AI回复后自动检查法官（因为已经完成一轮：用户发言 + AI回复）
   const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
-  await generateAiResponse(opponentRole, userText, false)
-  
-  // 每发言一轮后（用户发言 + 对方律师回复），法官AI判断是否应该发言
-  // 如果法官发言，发言完应该决定下一个发言人的身份
-  // 如果法官不发言，由原告和被告轮流发言
-  await checkJudgeShouldSpeak()
+  await generateAiResponse(opponentRole, userText, false, true)
 }
 
 // 生成用户AI代理回复（生成到输入框，不直接发送）
@@ -634,6 +630,17 @@ const buildBackground = () => {
 const checkJudgeShouldSpeak = async () => {
   if (isGenerating.value) return
   
+  // 如果最后一条消息是法官发言，说明法官刚刚发言了，应该从法官发言中提取下一个发言人
+  // 这种情况不应该进入这个函数，但如果进入了，应该直接提取下一个发言人
+  if (messages.value.length > 0) {
+    const lastMessage = messages.value[messages.value.length - 1]
+    if (lastMessage.role === 'judge') {
+      // 最后是法官发言，从法官发言中提取下一个发言人
+      await extractNextSpeakerFromJudgeSpeech(lastMessage.text)
+      return
+    }
+  }
+  
   // 设置生成状态，防止在法官思考时显示"轮到用户发言"
   isGenerating.value = true
   currentSpeakingRole.value = '法官'
@@ -700,7 +707,8 @@ const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
       return
     } else {
       // 用户是被告，下一个是原告（AI发言）
-      await generateAiResponse('plaintiff', '', false)
+      // 法官发言后，AI回复后不检查法官，等待用户发言
+      await generateAiResponse('plaintiff', '', false, false)
     }
   } else if (judgeSpeech.includes('请被告') || judgeSpeech.includes('被告继续') || judgeSpeech.includes('被告发言')) {
     // 如果用户是被告，轮到用户发言，不需要生成AI回复
@@ -708,10 +716,12 @@ const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
       return
     } else {
       // 用户是原告，下一个是被告（AI发言）
-      await generateAiResponse('defendant', '', false)
+      // 法官发言后，AI回复后不检查法官，等待用户发言
+      await generateAiResponse('defendant', '', false, false)
     }
   } else {
     // 如果没有明确指定，根据对话历史决定
+    // 注意：decideNextSpeaker 内部调用 generateAiResponse，也会触发 checkJudgeShouldSpeak
     await decideNextSpeaker()
   }
 }
@@ -735,7 +745,8 @@ const decideNextSpeaker = async () => {
         return
       } else {
         // 用户是被告，下一个是原告（AI发言）
-        await generateAiResponse('plaintiff', '', false)
+        // 法官发言后，AI回复后不检查法官，等待用户发言
+        await generateAiResponse('plaintiff', '', false, false)
       }
     } else {
       // 被告发言次数少，下一个是被告
@@ -744,7 +755,8 @@ const decideNextSpeaker = async () => {
         return
       } else {
         // 用户是原告，下一个是被告（AI发言）
-        await generateAiResponse('defendant', '', false)
+        // 法官发言后，AI回复后不检查法官，等待用户发言
+        await generateAiResponse('defendant', '', false, false)
       }
     }
   }
@@ -763,7 +775,8 @@ const continueAlternatingDebate = async () => {
       return
     } else {
       // 用户是被告，下一个是原告（AI发言）
-      await generateAiResponse('plaintiff', '', false)
+      // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
+      await generateAiResponse('plaintiff', '', false, true)
       return
     }
   }
@@ -776,7 +789,8 @@ const continueAlternatingDebate = async () => {
       return
     } else {
       // 用户是原告，下一个是被告（AI发言）
-      await generateAiResponse('defendant', '', false)
+      // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
+      await generateAiResponse('defendant', '', false, true)
     }
   } else {
     // 下一个是原告
@@ -785,13 +799,14 @@ const continueAlternatingDebate = async () => {
       return
     } else {
       // 用户是被告，下一个是原告（AI发言）
-      await generateAiResponse('plaintiff', '', false)
+      // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
+      await generateAiResponse('plaintiff', '', false, true)
     }
   }
 }
 
 // 生成AI回复
-const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
+const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shouldCheckJudgeAfter = false) => {
   if (isGenerating.value) return
   
   isGenerating.value = true
@@ -877,6 +892,16 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false) => {
       await nextTick()
       // 从法官发言中提取下一个发言人
       await extractNextSpeakerFromJudgeSpeech(firstJudgeSpeechText)
+    } else if (role === 'plaintiff' || role === 'defendant') {
+      // 如果标记了需要检查法官（因为已经完成一轮：用户发言 + AI回复），直接检查法官
+      if (shouldCheckJudgeAfter) {
+        await nextTick()
+        await checkJudgeShouldSpeak()
+      } else {
+        // AI（对方）发言后，下一个一定是用户，不检查法官，等待用户发言
+        // 用户发言后会生成对方AI回复，然后检查法官
+        // 所以这里什么都不做，直接返回
+      }
     }
   }
 }

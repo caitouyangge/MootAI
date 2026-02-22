@@ -108,7 +108,7 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
     ethical_boundaries = duty.get("ethical_boundaries", []) or []
     case_background = case_obj.get("case_background", "") or ""
 
-    return (
+    prompt = (
         "你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。\n\n"
         "角色定义：\n"
         f"- 角色：{role_position}\n"
@@ -123,6 +123,21 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
         "3. 遵循法庭辩论的逻辑顺序和程序规范\n"
         "4. 基于事实和法律条文进行专业辩论"
     )
+    
+    # 为审判员角色添加特殊约束
+    if role_position == '审判员':
+        prompt += "\n\n【重要约束】\n"
+        prompt += "1. 作为审判员，你绝对不能让自己发言，不能说\"请审判员发言\"、\"请审判员继续\"等类似的话。\n"
+        prompt += "2. 当你需要指定下一个发言人时，只能使用\"请原告继续\"或\"请被告继续\"。\n"
+        prompt += "3. 法庭辩论中只有\"审判员\"、\"原告\"、\"被告\"三个角色可以发言，案件背景中的机构名称、公司名称等不是法庭角色。\n"
+        prompt += "4. 【重要】当辩论阶段结束时，你必须发表完整的结束语，不能只说\"辩论阶段结束\"。\n"
+        prompt += "   结束语应包含：对双方辩论内容的总结、对争议焦点的归纳、对从宽从重情节的说明、\n"
+        prompt += "   对案件复杂性的认识、以及表明将依法公正判决的态度。\n"
+        prompt += "   示例格式：\"双方围绕[争议焦点]等问题已进行多轮充分辩论。法庭注意到，[从宽情节]，\n"
+        prompt += "   但[从重情节]的事实清楚，社会危害性[评价]。如何在依法惩处与合理考量其特殊情况之间作出裁量，\n"
+        prompt += "   本庭将严格依照法律规定，结合全案事实与证据，作出公正判决。辩论阶段结束。\"\n"
+    
+    return prompt
 
 
 def add_no_thought_constraint(system_prompt: str, assistant_role: str = "") -> str:
