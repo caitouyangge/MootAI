@@ -411,7 +411,7 @@ def generate():
     try:
         data = request.json
         prompt = data.get('prompt', '')
-        max_tokens = data.get('max_new_tokens', 512)
+        max_tokens = data.get('max_new_tokens', 8192)  # 默认值改为8192，基本无限制
         temperature = data.get('temperature', 0.6)
         top_p = data.get('top_p', 0.9)
         system_prompt = data.get('system_prompt')
@@ -452,7 +452,7 @@ def chat():
     try:
         data = request.json
         messages = data.get('messages', [])
-        max_tokens = data.get('max_new_tokens', 512)
+        max_tokens = data.get('max_new_tokens', 8192)  # 默认值改为8192，基本无限制
         temperature = data.get('temperature', 0.6)
         top_p = data.get('top_p', 0.9)
         system_prompt = data.get('system_prompt')
@@ -573,10 +573,10 @@ def debate_generate_training_format(data):
         logger.info(f"[训练格式] 第一条消息预览: {formatted_messages[0].get('content', '')[:100]}...")
         logger.info(f"[训练格式] 最后一条消息预览: {formatted_messages[-1].get('content', '')[:100]}...")
     
-    # 生成回复
+    # 生成回复（移除max_new_tokens限制，使用很大的值确保生成完整内容）
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=512,
+        max_new_tokens=8192,  # 设置为很大的值，基本无限制
         temperature=0.6,
         top_p=0.9,
         system_prompt=system_prompt,
@@ -584,9 +584,11 @@ def debate_generate_training_format(data):
     )
     
     logger.info(f"[训练格式] 生成回复长度: {len(response)}")
+    logger.info(f"[训练格式] 生成回复预览: {response[:200]}...")
     
     return jsonify({
-        'response': response,
+        'code': 200,
+        'data': response,
         'role': agent_role,
         'success': True
     })
@@ -625,18 +627,22 @@ def debate_generate_legacy_format(data):
             'content': prompt
         })
     
-    # 生成回复
+    # 生成回复（移除max_new_tokens限制，使用很大的值确保生成完整内容）
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=512,
+        max_new_tokens=8192,  # 设置为很大的值，基本无限制
         temperature=0.6,
         top_p=0.9,
         system_prompt=system_prompt,
         assistant_role=assistant_role
     )
     
+    logger.info(f"[旧格式] 生成回复长度: {len(response)}")
+    logger.info(f"[旧格式] 生成回复预览: {response[:200]}...")
+    
     return jsonify({
-        'response': response,
+        'code': 200,
+        'data': response,
         'role': current_role,
         'success': True
     })

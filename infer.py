@@ -166,11 +166,27 @@ def load_case_file(path: str) -> Dict[str, Any]:
 
 
 def extract_final(text: str) -> Optional[str]:
+    """
+    提取 <final> 标签中的内容
+    如果标签不完整（只有开始标签没有结束标签），尝试提取开始标签后的所有内容
+    """
     t = text.strip()
     start = t.find("<final>")
     end = t.find("</final>")
-    if start != -1 and end != -1 and end > start:
-        return t[start + len("<final>") : end].strip()
+    
+    if start != -1:
+        if end != -1 and end > start:
+            # 完整的标签
+            return t[start + len("<final>") : end].strip()
+        else:
+            # 只有开始标签，没有结束标签，提取开始标签后的所有内容
+            content = t[start + len("<final>") :].strip()
+            # 记录警告（用于调试）
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"[extract_final] 检测到不完整的<final>标签，提取内容长度: {len(content)}")
+            return content if content else None
+    
     return None
 
 
@@ -237,15 +253,28 @@ def generate_with_retries(
         top_p=top_p,
     )
     
+    # 记录原始生成内容（用于调试）
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[生成调试] 原始生成内容长度: {len(ans)}")
+    logger.info(f"[生成调试] 原始生成内容预览: {ans[:300]}...")
+    
     # 尝试提取 <final> 标签中的内容
     final = extract_final(ans)
     if final:
+        logger.info(f"[生成调试] 提取到final标签，内容长度: {len(final)}")
+        logger.info(f"[生成调试] final内容预览: {final[:300]}...")
         # 去除角色前缀（因为系统提示词要求输出时包含角色前缀，但前端会自己添加）
         cleaned = remove_role_prefix(final, assistant_role)
+        logger.info(f"[生成调试] 去除角色前缀后长度: {len(cleaned)}")
+        logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
         return cleaned
     
     # 如果没有 final 标签，尝试去除角色前缀后返回原始输出
+    logger.info(f"[生成调试] 未找到final标签，使用原始输出")
     cleaned = remove_role_prefix(ans, assistant_role)
+    logger.info(f"[生成调试] 去除角色前缀后长度: {len(cleaned)}")
+    logger.info(f"[生成调试] 最终返回内容预览: {cleaned[:300]}...")
     return cleaned
 
 
@@ -322,33 +351,38 @@ def generate_one(
             attention_mask = attention_mask.to(device)
 
     with torch.inference_mode():
+        # 准备生成参数
+        generation_kwargs = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "max_new_tokens": max_new_tokens,
+            "do_sample": temperature > 0,
+            "temperature": temperature if temperature > 0 else None,
+            "top_p": top_p,
+            "pad_token_id": tokenizer.eos_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+            "use_cache": True,  # 启用KV缓存，显著提升速度
+            "repetition_penalty": 1.1,  # 避免重复生成
+        }
+        
         # 对于量化模型，使用torch.cuda.amp.autocast可能有助于性能
         if torch.cuda.is_available() and device.type == 'cuda':
             with torch.cuda.amp.autocast():
-                output_ids = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=temperature > 0,
-                    temperature=temperature if temperature > 0 else None,
-                    top_p=top_p,
-                    pad_token_id=tokenizer.eos_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                )
+                output_ids = model.generate(**generation_kwargs)
         else:
-            output_ids = model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                do_sample=temperature > 0,
-                temperature=temperature if temperature > 0 else None,
-                top_p=top_p,
-                pad_token_id=tokenizer.eos_token_id,
-                eos_token_id=tokenizer.eos_token_id,
-            )
+            output_ids = model.generate(**generation_kwargs)
 
     new_tokens = output_ids[0, input_ids.shape[-1] :]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    decoded = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    
+    # 记录生成信息（用于调试）
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
+    logger.info(f"[生成调试] 解码后内容长度: {len(decoded)}")
+    logger.info(f"[生成调试] 解码后内容预览: {decoded[:300]}...")
+    
+    return decoded
 
 
 def main() -> int:
@@ -356,7 +390,7 @@ def main() -> int:
     parser.add_argument("--adapter_dir", default="court_debate_model", help="LoRA 适配器目录")
     parser.add_argument("--base_model", default=None, help="可选：覆盖 adapter_config.json 里的 base model")
     parser.add_argument("--load_in_4bit", action="store_true", help="启用 4bit 量化加载（需要 bitsandbytes）")
-    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--max_new_tokens", type=int, default=2048, help="最大生成token数（默认2048，平衡速度和长度）")
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top_p", type=float, default=0.9)
     parser.add_argument("--system", type=str, default="你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。")
@@ -449,6 +483,7 @@ def main() -> int:
     print(f"  3. 检查网络连接和防火墙设置")
     
     try:
+        print(f"[信息] 提示: 模型加载可能需要几分钟，请耐心等待...")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
             device_map=device_map,
