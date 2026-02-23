@@ -157,8 +157,11 @@ def extract_final(text: str) -> Optional[str]:
     """
     提取 <final> 标签中的内容
     如果标签不完整（只有开始标签没有结束标签），尝试提取开始标签后的所有内容
+    同时支持错误的标签格式 final>（自动纠正）
     """
     t = text.strip()
+    
+    # 首先尝试查找正确的 <final> 标签
     start = t.find("<final>")
     end = t.find("</final>")
     
@@ -174,6 +177,27 @@ def extract_final(text: str) -> Optional[str]:
             logger = logging.getLogger(__name__)
             logger.warning(f"[extract_final] 检测到不完整的<final>标签，提取内容长度: {len(content)}")
             return content if content else None
+    
+    # 如果没有找到正确的标签，尝试查找错误的标签格式 final>
+    if start == -1 and "final>" in t:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"[extract_final] 检测到错误的标签格式 'final>'，尝试自动纠正并提取")
+        # 查找 final> 的位置（错误的开始标签）
+        wrong_start = t.find("final>")
+        if wrong_start != -1:
+            # 尝试查找结束标签 </final>
+            end = t.find("</final>", wrong_start)
+            if end != -1:
+                # 找到了结束标签，提取内容（注意：wrong_start 指向 "final>" 的开始，需要加上 "final>" 的长度）
+                content = t[wrong_start + len("final>") : end].strip()
+                logger.info(f"[extract_final] 从错误格式标签中提取内容，长度: {len(content)}")
+                return content if content else None
+            else:
+                # 没有结束标签，提取 final> 后的所有内容
+                content = t[wrong_start + len("final>") :].strip()
+                logger.warning(f"[extract_final] 从错误格式标签中提取内容（无结束标签），长度: {len(content)}")
+                return content if content else None
     
     return None
 
@@ -412,10 +436,12 @@ def generate_one(
     logger.debug(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
     logger.debug(f"[生成调试] 解码后内容长度: {len(decoded)}")
     
-    # 检查是否包含 <final> 标签，如果没有则检查是否有 final>（可能是生成错误）
+    # 检查并纠正错误的标签格式：将 final> 纠正为 <final>
     if "<final>" not in decoded and "final>" in decoded:
-        logger.warning(f"[生成调试] 检测到错误的标签格式 'final>'，应该是 '<final>'")
-        logger.warning(f"[生成调试] 原始生成内容: {decoded[:500]}")
+        logger.warning(f"[生成调试] 检测到错误的标签格式 'final>'，自动纠正为 '<final>'")
+        # 将所有的 final> 替换为 <final>（处理开始标签）
+        decoded = decoded.replace("final>", "<final>", 1)  # 只替换第一个出现的位置
+        logger.info(f"[生成调试] 已纠正标签格式")
     
     return decoded
 
