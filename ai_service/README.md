@@ -78,7 +78,7 @@ Body: {
 ```
 POST /api/debate/generate
 Body: {
-  "agent_role": "审判员",        // 当前要回复的角色：审判员、公诉人、辩护人、原告、被告
+  "agent_role": "审判员",        // 当前要回复的角色：审判员、公诉人、辩护人、公诉人、辩护人
   "background": "...",           // 案件背景
   "context": "审判员: 现在开庭...\n公诉人: 根据起诉书...",  // 对话历史（用\n分隔）
   "role_to_reply": "辩护人",     // 要回复的角色（可选，默认与agent_role相同）
@@ -90,7 +90,7 @@ Body: {
 ```json
 {
   "agent_role": "审判员",
-  "background": "2025年6月间，被告人艾某某在新疆维吾尔自治区阿克苏市，多次于夜间趁无人之机，潜入某通信基站内，使用工具盗割通信电缆。",
+  "background": "2025年6月间，辩护人人艾某某在新疆维吾尔自治区阿克苏市，多次于夜间趁无人之机，潜入某通信基站内，使用工具盗割通信电缆。",
   "context": "审判员: 现在进入法庭辩论阶段。请公诉人发表公诉意见。\n公诉人: 审判员，本案事实清楚，证据确实充分...\n辩护人: 审判员，我方对指控罪名及基本事实无异议...",
   "instruction": "作为审判员，你需要：\n1. 保持中立、客观、公正的立场\n2. 引导庭审程序有序进行，控制庭审节奏\n3. 对争议焦点进行归纳和总结"
 }
@@ -103,7 +103,7 @@ Body: {
   "user_identity": "plaintiff",  // 用户身份：plaintiff 或 defendant
   "current_role": "judge",       // 当前角色：judge, plaintiff, defendant
   "messages": [...],              // 对话历史
-  "judge_type": "neutral",        // 法官类型
+  "judge_type": "neutral",        // 审判员类型
   "case_description": "..."       // 案件描述
 }
 ```

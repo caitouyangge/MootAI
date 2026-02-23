@@ -119,7 +119,7 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
     
     # 为审判员角色添加特殊约束
     if role_position == '审判员':
-        prompt += "\n约束：禁止自指发言；不指定发言人（系统自动管理）；仅审判员/原告/被告可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。"
+        prompt += "\n约束：禁止自指发言；不指定发言人（系统自动管理）；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。"
     
     return prompt
 
@@ -214,7 +214,7 @@ def remove_role_prefix(text: str, role: str = "") -> str:
     
     Args:
         text: 原始文本
-        role: 角色名称（如"审判员"、"原告"、"被告"），如果为空则尝试自动检测
+        role: 角色名称（如"审判员"、"公诉人"、"辩护人"），如果为空则尝试自动检测
     
     Returns:
         去除角色前缀后的文本
@@ -236,7 +236,7 @@ def remove_role_prefix(text: str, role: str = "") -> str:
                 return text[len(prefix):].strip()
     
     # 自动检测并去除角色前缀（支持常见角色）
-    common_roles = ["审判员", "公诉人", "辩护人", "原告", "被告"]
+    common_roles = ["审判员", "公诉人", "辩护人"]
     for role_name in common_roles:
         prefixes = [
             f"{role_name}：",

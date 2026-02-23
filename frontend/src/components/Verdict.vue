@@ -55,11 +55,11 @@
       <h2 class="section-title">当事人诉讼请求和答辩</h2>
       <div class="section-content">
         <div class="content-item">
-          <h3 class="item-title">原告诉讼请求</h3>
+          <h3 class="item-title">公诉人诉讼请求</h3>
           <p>{{ verdictInfo.requests.plaintiff }}</p>
         </div>
         <div class="content-item">
-          <h3 class="item-title">被告的答辩意见</h3>
+          <h3 class="item-title">辩护人的答辩意见</h3>
           <p>{{ verdictInfo.requests.defendant }}</p>
         </div>
         <div class="content-item">

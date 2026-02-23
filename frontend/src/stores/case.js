@@ -55,7 +55,7 @@ export const useCaseStore = defineStore('case', () => {
   // 案件ID（从 localStorage 初始化）
   const caseId = ref(initCaseId)
   
-  // 法官类型
+  // 审判员类型
   const selectedJudgeType = ref('')
   
   // 对方AI律师的辩论策略
@@ -95,7 +95,7 @@ export const useCaseStore = defineStore('case', () => {
     caseDescription.value = description
   }
   
-  // 设置法官类型
+  // 设置审判员类型
   const setJudgeType = (judgeType) => {
     selectedJudgeType.value = judgeType
   }

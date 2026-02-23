@@ -148,7 +148,7 @@
           <div class="guide-icon">⚖️</div>
           <div class="guide-content">
             <div class="guide-title">庭中辩论阶段</div>
-            <div class="guide-desc">选择法官类型，开始模拟法庭辩论。您可以随时查看庭前准备的材料。</div>
+            <div class="guide-desc">选择审判员类型，开始模拟法庭辩论。您可以随时查看庭前准备的材料。</div>
           </div>
         </div>
         <div v-else-if="activeTab === 'verdict'" class="stage-guide">

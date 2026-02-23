@@ -35,7 +35,7 @@ public class Case {
     private List<String> fileNames = new ArrayList<>();
     
     @Column(name = "judge_type", length = 50)
-    private String judgeType; // 法官类型
+    private String judgeType; // 审判员类型
     
     @Column(name = "opponent_strategy", length = 50)
     private String opponentStrategy; // 对方AI律师的辩论策略

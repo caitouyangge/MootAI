@@ -14,7 +14,7 @@ public class CaseRequest {
     
     private String caseDescription; // 案件描述（逐步保存时可能为空）
     
-    private String judgeType; // 法官类型（可选）
+    private String judgeType; // 审判员类型（可选）
     
     private String opponentStrategy; // 对方AI律师的辩论策略（可选）
     

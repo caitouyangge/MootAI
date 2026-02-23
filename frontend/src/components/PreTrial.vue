@@ -37,7 +37,7 @@
             @click="selectIdentity('plaintiff')"
           >
             <div class="option-icon">👨‍⚖️</div>
-            <div class="option-label">原告</div>
+            <div class="option-label">公诉人</div>
             <div class="option-desc">提起诉讼的一方</div>
           </div>
           <div
@@ -46,7 +46,7 @@
             @click="selectIdentity('defendant')"
           >
             <div class="option-icon">⚖️</div>
-            <div class="option-label">被告</div>
+            <div class="option-label">辩护人</div>
             <div class="option-desc">被起诉的一方</div>
           </div>
         </div>
@@ -168,16 +168,16 @@
         </div>
       </div>
 
-      <!-- 步骤4：选择法官类型 -->
+      <!-- 步骤4：选择审判员类型 -->
       <div v-else-if="currentStep === 'judge'" class="step-content">
         <div class="step-header">
-          <h3 class="step-title">步骤4：选择法官类型</h3>
-          <p class="step-desc">请选择本次模拟庭审的法官类型</p>
+          <h3 class="step-title">步骤4：选择审判员类型</h3>
+          <p class="step-desc">请选择本次模拟庭审的审判员类型</p>
         </div>
         <div class="judge-select-section">
           <el-select
             v-model="selectedJudgeType"
-            placeholder="请选择法官类型"
+            placeholder="请选择审判员类型"
             class="judge-select"
             @change="onJudgeTypeChange"
           >
@@ -259,7 +259,7 @@ const steps = [
   { key: 'identity', label: '选择身份' },
   { key: 'upload', label: '上传资料' },
   { key: 'description', label: '生成描述' },
-  { key: 'judge', label: '选择法官' },
+  { key: 'judge', label: '选择审判员' },
   { key: 'strategy', label: '选择策略' }
 ]
 
@@ -753,7 +753,7 @@ watch(caseDescription, async (newVal) => {
   }
 })
 
-// 法官类型
+// 审判员类型
 const judgeTypes = ref([
   {
     value: 'professional',
@@ -767,13 +767,13 @@ const judgeTypes = ref([
   },
   {
     value: 'partial-plaintiff',
-    label: '偏袒型（原告）',
-    description: '习惯对原告宽容'
+    label: '偏袒型（公诉人）',
+    description: '习惯对公诉人宽容'
   },
   {
     value: 'partial-defendant',
-    label: '偏袒型（被告）',
-    description: '习惯对被告宽容'
+    label: '偏袒型（辩护人）',
+    description: '习惯对辩护人宽容'
   },
   {
     value: 'neutral',
@@ -786,7 +786,7 @@ const selectedJudgeType = ref(caseStore.selectedJudgeType || '')
 
 const onJudgeTypeChange = async () => {
   caseStore.setJudgeType(selectedJudgeType.value)
-  // 选择法官类型后，保存到数据库
+  // 选择审判员类型后，保存到数据库
   await saveCase(true)
 }
 
@@ -906,7 +906,7 @@ onMounted(async () => {
   // 3. description 步骤：检查是否有案件描述
   const hasDescription = caseDescription.value && caseDescription.value.trim() !== ''
   
-  // 4. judge 步骤：检查是否选择了法官类型
+  // 4. judge 步骤：检查是否选择了审判员类型
   const hasJudge = selectedJudgeType.value && selectedJudgeType.value !== ''
   
   // 5. strategy 步骤：检查是否选择了策略
@@ -923,7 +923,7 @@ onMounted(async () => {
     // 如果还没有生成描述，显示描述生成页面
     currentStep.value = 'description'
   } else if (!hasJudge) {
-    // 如果还没有选择法官类型，显示法官选择页面
+    // 如果还没有选择审判员类型，显示审判员选择页面
     currentStep.value = 'judge'
   } else if (!hasStrategy) {
     // 如果还没有选择策略，显示策略选择页面
@@ -1407,7 +1407,7 @@ onMounted(async () => {
   white-space: pre-line;
 }
 
-/* 法官类型选择 */
+/* 审判员类型选择 */
 .judge-select-section {
   margin: 20px 0;
 }

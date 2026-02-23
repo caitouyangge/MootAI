@@ -4,7 +4,7 @@
     <div class="identity-display-section">
       <h3 class="section-title">身份</h3>
       <div class="identity-info">
-        <span class="identity-label">{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}</span>
+        <span class="identity-label">{{ userIdentity === 'plaintiff' ? '公诉人' : '辩护人' }}</span>
       </div>
     </div>
 
@@ -40,9 +40,9 @@
       </el-collapse-transition>
     </div>
 
-    <!-- 法官类型显示 -->
+    <!-- 审判员类型显示 -->
     <div class="judge-display-section">
-      <h3 class="section-title">法官类型</h3>
+      <h3 class="section-title">审判员类型</h3>
       <div class="judge-info">
         <span class="judge-label">{{ getJudgeLabel(selectedJudgeType) }}</span>
         <span class="judge-desc">{{ getJudgeDescription(selectedJudgeType) }}</span>
@@ -53,7 +53,7 @@
     <div class="strategy-display-section">
       <h3 class="section-title">对方AI律师策略</h3>
       <div class="strategy-card" :class="userIdentity === 'plaintiff' ? 'defendant-strategy' : 'plaintiff-strategy'">
-        <div class="strategy-label">{{ userIdentity === 'plaintiff' ? '被告' : '原告' }}策略</div>
+        <div class="strategy-label">{{ userIdentity === 'plaintiff' ? '辩护人' : '公诉人' }}策略</div>
         <div class="strategy-content">{{ userIdentity === 'plaintiff' ? defendantStrategy : plaintiffStrategy }}</div>
       </div>
     </div>
@@ -97,7 +97,7 @@
           :key="index"
           :class="['message-item', `message-${message.role}`]"
         >
-          <!-- 原告：左边布局 -->
+          <!-- 公诉人：左边布局 -->
           <template v-if="message.role === 'plaintiff'">
             <div class="message-avatar">
               <div class="avatar avatar-plaintiff">原</div>
@@ -136,7 +136,7 @@
             </div>
           </template>
 
-          <!-- 法官：中间布局 -->
+          <!-- 审判员：中间布局 -->
           <template v-else-if="message.role === 'judge'">
             <div class="message-center-wrapper">
               <div class="message-avatar-center">
@@ -157,7 +157,7 @@
             </div>
           </template>
 
-          <!-- 被告：右边布局 -->
+          <!-- 辩护人：右边布局 -->
           <template v-else-if="message.role === 'defendant'">
             <div class="message-defendant-wrapper">
               <div class="message-content-wrapper message-content-right">
@@ -210,7 +210,7 @@
           </div>
           <div v-else-if="isUserTurn" class="status-item status-user-turn">
             <span class="status-icon">💬</span>
-            <span class="status-text">轮到您发言了（{{ userIdentity === 'plaintiff' ? '原告' : '被告' }}）</span>
+            <span class="status-text">轮到您发言了（{{ userIdentity === 'plaintiff' ? '公诉人' : '辩护人' }}）</span>
           </div>
           <div v-else class="status-item status-waiting">
             <span class="status-icon">⏸️</span>
@@ -256,7 +256,7 @@
             v-model="userInput"
             type="textarea"
             :rows="3"
-            :placeholder="isUserTurn ? (useAiProxy ? '点击AI生成发言按钮生成内容，确认后点击发送' : `请输入您的发言（作为${userIdentity === 'plaintiff' ? '原告' : '被告'}）...`) : '请等待其他角色发言...'"
+            :placeholder="isUserTurn ? (useAiProxy ? '点击AI生成发言按钮生成内容，确认后点击发送' : `请输入您的发言（作为${userIdentity === 'plaintiff' ? '公诉人' : '辩护人'}）...`) : '请等待其他角色发言...'"
             class="user-input"
             :disabled="!isUserTurn || isGenerating"
             @keydown.ctrl.enter="sendMessage"
@@ -297,7 +297,7 @@
         开始庭审
       </el-button>
       <p v-if="!debateStarted && (!selectedJudgeType || !opponentStrategy)" class="start-hint">
-        请先在庭前准备阶段完成法官类型和策略选择
+        请先在庭前准备阶段完成审判员类型和策略选择
       </p>
       <el-button
         v-if="debateCompleted"
@@ -333,7 +333,7 @@ const caseDescription = ref(caseStore.caseDescription || '')
 const fileList = ref(caseStore.fileList || [])
 const showMaterials = ref(false)
 
-// 法官类型（从store读取）
+// 审判员类型（从store读取）
 const judgeTypes = ref([
   {
     value: 'professional',
@@ -347,13 +347,13 @@ const judgeTypes = ref([
   },
   {
     value: 'partial-plaintiff',
-    label: '偏袒型（原告）',
-    description: '习惯对原告宽容'
+    label: '偏袒型（公诉人）',
+    description: '习惯对公诉人宽容'
   },
   {
     value: 'partial-defendant',
-    label: '偏袒型（被告）',
-    description: '习惯对被告宽容'
+    label: '偏袒型（辩护人）',
+    description: '习惯对辩护人宽容'
   },
   {
     value: 'neutral',
@@ -411,11 +411,11 @@ const userStrategy = ref('balanced') // 用户自己的策略
 // 根据用户身份和对方策略初始化策略
 const initStrategies = () => {
   if (userIdentity.value === 'plaintiff') {
-    // 用户是原告，对方是被告
+    // 用户是公诉人，对方是辩护人
     defendantStrategy.value = strategyDefinitions[opponentStrategy.value] || strategyDefinitions.balanced
     plaintiffStrategy.value = '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。'
   } else {
-    // 用户是被告，对方是原告
+    // 用户是辩护人，对方是公诉人
     plaintiffStrategy.value = strategyDefinitions[opponentStrategy.value] || strategyDefinitions.balanced
     defendantStrategy.value = '均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。'
   }
@@ -482,10 +482,10 @@ const saveEdit = async (index) => {
 // 开始庭审
 const startDebate = async () => {
   console.log('[辩论流程] 开始庭审 - 开始')
-  console.log('[辩论流程] 法官类型:', selectedJudgeType.value, ', 对方策略:', opponentStrategy.value)
+  console.log('[辩论流程] 审判员类型:', selectedJudgeType.value, ', 对方策略:', opponentStrategy.value)
   
   if (!selectedJudgeType.value) {
-    ElMessage.warning('请先在庭前准备阶段选择法官类型')
+    ElMessage.warning('请先在庭前准备阶段选择审判员类型')
     return
   }
   
@@ -509,12 +509,12 @@ const startDebate = async () => {
     await saveDebateMessages()
   }
   
-  // 法官宣布开始（使用固定文本，避免AI生成不同内容）
-  const firstJudgeSpeech = '现在开庭。请原告陈述诉讼请求和事实理由。'
-  console.log('[辩论流程] 添加首次法官发言（固定文本）')
+  // 审判员宣布开始（使用固定文本，避免AI生成不同内容）
+  const firstJudgeSpeech = '现在开庭。请公诉人陈述诉讼请求和事实理由。'
+  console.log('[辩论流程] 添加首次审判员发言（固定文本）')
   
-  // 直接添加法官消息，不使用AI生成
-  addMessage('judge', '法官', firstJudgeSpeech)
+  // 直接添加审判员消息，不使用AI生成
+  addMessage('judge', '审判员', firstJudgeSpeech)
   
   // 立即保存到数据库
   if (caseStore.caseId) {
@@ -522,8 +522,8 @@ const startDebate = async () => {
     await saveDebateMessages()
   }
   
-  // 法官发言后，继续正常的发言顺序
-  console.log('[辩论流程] 首次法官发言完成，继续正常的发言顺序')
+  // 审判员发言后，继续正常的发言顺序
+  console.log('[辩论流程] 首次审判员发言完成，继续正常的发言顺序')
   await nextTick() // 确保消息已添加
   await extractNextSpeakerFromJudgeSpeech(firstJudgeSpeech)
   console.log('[辩论流程] 开始庭审 - 结束')
@@ -551,7 +551,7 @@ const sendMessage = async () => {
   console.log('[辩论流程] 用户发言内容长度:', userText.length, ', 预览:', userText.substring(0, 100))
   
   // 更新当前发言角色为用户
-  const userRoleName = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  const userRoleName = userIdentity.value === 'plaintiff' ? '公诉人' : '辩护人'
   currentSpeakingRole.value = userRoleName
   console.log('[辩论流程] 设置用户发言角色:', userRoleName)
   
@@ -562,8 +562,8 @@ const sendMessage = async () => {
   currentSpeakingRole.value = ''
   console.log('[辩论流程] 用户发言完成，清空发言角色')
   
-  // 每次发言结束后，都检查法官是否需要介入
-  // checkJudgeShouldSpeak 内部会判断是否满足硬性条件（距离上次法官发言后，至少完成一轮）
+  // 每次发言结束后，都检查审判员是否需要介入
+  // checkJudgeShouldSpeak 内部会判断是否满足硬性条件（距离上次审判员发言后，至少完成一轮）
   await checkJudgeShouldSpeak()
   console.log('[辩论流程] 用户发送消息 - 结束')
 }
@@ -575,7 +575,7 @@ const generateUserAiResponse = async () => {
   isGenerating.value = true
   
   // 更新当前发言角色为用户
-  const roleName = userIdentity.value === 'plaintiff' ? '原告' : '被告'
+  const roleName = userIdentity.value === 'plaintiff' ? '公诉人' : '辩护人'
   currentSpeakingRole.value = roleName
   
   try {
@@ -629,7 +629,7 @@ const buildBackground = () => {
   
   // 1. 身份信息
   background += `【身份信息】\n`
-  background += `用户身份：${userIdentity.value === 'plaintiff' ? '原告' : '被告'}\n\n`
+  background += `用户身份：${userIdentity.value === 'plaintiff' ? '公诉人' : '辩护人'}\n\n`
   
   // 2. 文件列表
   if (fileList.value && fileList.value.length > 0) {
@@ -656,23 +656,23 @@ const buildBackground = () => {
     const userStrategyDesc = useAiProxy.value && userStrategy.value 
       ? strategyDefinitions[userStrategy.value] 
       : plaintiffStrategy.value
-    background += `原告策略：${userStrategyDesc}\n`
-    background += `被告策略：${defendantStrategy.value}\n`
+    background += `公诉人策略：${userStrategyDesc}\n`
+    background += `辩护人策略：${defendantStrategy.value}\n`
   } else {
     // 如果用户使用AI代理，使用用户选择的策略；否则使用默认策略
     const userStrategyDesc = useAiProxy.value && userStrategy.value 
       ? strategyDefinitions[userStrategy.value] 
       : defendantStrategy.value
-    background += `原告策略：${plaintiffStrategy.value}\n`
-    background += `被告策略：${userStrategyDesc}\n`
+    background += `公诉人策略：${plaintiffStrategy.value}\n`
+    background += `辩护人策略：${userStrategyDesc}\n`
   }
   
   return background
 }
 
-// 检查法官是否应该发言
+// 检查审判员是否应该发言
 const checkJudgeShouldSpeak = async () => {
-  console.log('[辩论流程] 检查法官是否应该发言 - 开始')
+  console.log('[辩论流程] 检查审判员是否应该发言 - 开始')
   console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
   console.log('[辩论流程] 消息数量:', messages.value.length)
   
@@ -681,29 +681,29 @@ const checkJudgeShouldSpeak = async () => {
     return
   }
   
-  // 如果最后一条消息是法官发言，说明法官刚刚发言了，应该继续正常的发言顺序
+  // 如果最后一条消息是审判员发言，说明审判员刚刚发言了，应该继续正常的发言顺序
   // 这种情况不应该进入这个函数，但如果进入了，应该直接继续正常发言顺序
   if (messages.value.length > 0) {
     const lastMessage = messages.value[messages.value.length - 1]
     console.log('[辩论流程] 最后一条消息 - 角色:', lastMessage.role, ', 内容预览:', lastMessage.text.substring(0, 50))
     
     if (lastMessage.role === 'judge') {
-      console.log('[辩论流程] 最后是法官发言，继续正常的发言顺序')
-      // 最后是法官发言，继续正常的发言顺序
-      // 注意：这里不需要设置isGenerating，因为法官已经发言完成
+      console.log('[辩论流程] 最后是审判员发言，继续正常的发言顺序')
+      // 最后是审判员发言，继续正常的发言顺序
+      // 注意：这里不需要设置isGenerating，因为审判员已经发言完成
       await extractNextSpeakerFromJudgeSpeech(lastMessage.text)
       console.log('[辩论流程] 继续正常发言顺序完成')
       return
     }
   }
   
-  // 设置生成状态，防止在法官思考时显示"轮到用户发言"
-  console.log('[辩论流程] 设置法官发言状态')
+  // 设置生成状态，防止在审判员思考时显示"轮到用户发言"
+  console.log('[辩论流程] 设置审判员发言状态')
   isGenerating.value = true
-  currentSpeakingRole.value = '法官'
+  currentSpeakingRole.value = '审判员'
   
-  // 检查是否满足硬性条件：距离上一次法官发言，至少已经有两条消息（构成一轮）
-  // 找到最后一次法官发言的位置
+  // 检查是否满足硬性条件：距离上一次审判员发言，至少已经有两条消息（构成一轮）
+  // 找到最后一次审判员发言的位置
   let lastJudgeIndex = -1
   for (let i = messages.value.length - 1; i >= 0; i--) {
     if (messages.value[i].role === 'judge') {
@@ -712,20 +712,20 @@ const checkJudgeShouldSpeak = async () => {
     }
   }
   
-  // 获取距离上次法官发言后的所有非法官消息
+  // 获取距离上次审判员发言后的所有非审判员消息
   const messagesAfterLastJudge = messages.value.slice(lastJudgeIndex + 1).filter(m => m.role !== 'judge')
-  console.log('[辩论流程] 距离上次法官发言后的非法官消息数:', messagesAfterLastJudge.length)
+  console.log('[辩论流程] 距离上次审判员发言后的非审判员消息数:', messagesAfterLastJudge.length)
   
-  // 硬性要求：必须距离上一次法官发言后，至少已经有两条消息（构成一轮）
+  // 硬性要求：必须距离上一次审判员发言后，至少已经有两条消息（构成一轮）
   if (messagesAfterLastJudge.length < 2) {
-    console.log('[辩论流程] 距离上次法官发言后，只有', messagesAfterLastJudge.length, '条消息，不满足硬性条件（至少完成一轮），跳过法官检查')
+    console.log('[辩论流程] 距离上次审判员发言后，只有', messagesAfterLastJudge.length, '条消息，不满足硬性条件（至少完成一轮），跳过审判员检查')
     isGenerating.value = false
     currentSpeakingRole.value = ''
     await continueAlternatingDebate()
     return
   }
   
-  // 检查最后两条消息是否构成一轮（原告+被告或被告+原告）
+  // 检查最后两条消息是否构成一轮（公诉人+辩护人或辩护人+公诉人）
   const lastMessage = messagesAfterLastJudge[messagesAfterLastJudge.length - 1]
   const secondLastMessage = messagesAfterLastJudge[messagesAfterLastJudge.length - 2]
   
@@ -734,7 +734,7 @@ const checkJudgeShouldSpeak = async () => {
     (lastMessage.role === 'defendant' && secondLastMessage.role === 'plaintiff')
   
   if (!isCompleteRound) {
-    console.log('[辩论流程] 距离上次法官发言后，最后两条消息不构成一轮（原告+被告），不满足硬性条件，跳过法官检查')
+    console.log('[辩论流程] 距离上次审判员发言后，最后两条消息不构成一轮（公诉人+辩护人），不满足硬性条件，跳过审判员检查')
     console.log('[辩论流程] 最后一条:', lastMessage.role, ', 前一条:', secondLastMessage.role)
     isGenerating.value = false
     currentSpeakingRole.value = ''
@@ -743,12 +743,12 @@ const checkJudgeShouldSpeak = async () => {
   }
   
   // 满足硬性条件，可以判断
-  console.log('[辩论流程] 满足硬性条件（距离上次法官发言后，至少完成一轮：' + secondLastMessage.role + '->' + lastMessage.role + '），开始判断法官是否需要介入')
+  console.log('[辩论流程] 满足硬性条件（距离上次审判员发言后，至少完成一轮：' + secondLastMessage.role + '->' + lastMessage.role + '），开始判断审判员是否需要介入')
   
   // 构建判断提示词
   const judgeCheckPrompt = `根据当前的庭审对话历史，请判断作为审判员，你是否需要发言。
 
-【重要】发言顺序：原告先发言，然后被告发言，每完成一轮（原告+被告）后，你判断是否需要介入。
+【重要】发言顺序：公诉人先发言，然后辩护人发言，每完成一轮（公诉人+辩护人）后，你判断是否需要介入。
 
 【绝对禁止】如果对话历史不为空，说明庭审已经开始了，你绝对不能再重复说以下任何内容：
 - "现在开庭"
@@ -770,8 +770,8 @@ const checkJudgeShouldSpeak = async () => {
 
 【重要原则】
 1. 非必要不介入，不说废话。如果双方辩论正常进行，没有程序问题，没有需要纠正的地方，就不要发言。
-2. 如果需要发言，发言内容必须简洁、专业、有针对性，不要说套话、空话。你不再有指定下一个发言人的权力，发言顺序由系统自动管理，原告和被告会按照正常顺序轮流发言。
-3. 如果不需要发言，请只输出"不需要发言"，然后由原告和被告继续轮流发言。`
+2. 如果需要发言，发言内容必须简洁、专业、有针对性，不要说套话、空话。你不再有指定下一个发言人的权力，发言顺序由系统自动管理，公诉人和辩护人会按照正常顺序轮流发言。
+3. 如果不需要发言，请只输出"不需要发言"，然后由公诉人和辩护人继续轮流发言。`
   
   // 记录开始时间
   const startTime = Date.now()
@@ -783,7 +783,7 @@ const checkJudgeShouldSpeak = async () => {
       text: msg.text
     }))
     
-    console.log('[辩论流程] 调用AI服务判断法官是否需要发言')
+    console.log('[辩论流程] 调用AI服务判断审判员是否需要发言')
     const response = await request.post('/debate/generate', {
       userIdentity: userIdentity.value,
       currentRole: 'judge',
@@ -802,7 +802,7 @@ const checkJudgeShouldSpeak = async () => {
     
     if (response.code === 200 && response.data) {
       let judgeResponse = response.data.trim()
-      console.log('[辩论流程] AI返回法官响应，长度:', judgeResponse.length, ', 耗时:', duration, '秒, 预览:', judgeResponse.substring(0, 100))
+      console.log('[辩论流程] AI返回审判员响应，长度:', judgeResponse.length, ', 耗时:', duration, '秒, 预览:', judgeResponse.substring(0, 100))
       
       // 检查并过滤禁止的短语（如果对话历史不为空）
       if (messages.value.length > 0) {
@@ -833,44 +833,44 @@ const checkJudgeShouldSpeak = async () => {
         }
       }
       
-      // 判断法官是否发言（如果包含"不需要发言"，则不发言）
+      // 判断审判员是否发言（如果包含"不需要发言"，则不发言）
       if (judgeResponse && !judgeResponse.includes('不需要发言')) {
-        console.log('[辩论流程] 法官决定发言，添加消息')
-        // 法官发言
-        addMessage('judge', '法官', judgeResponse, parseFloat(duration))
+        console.log('[辩论流程] 审判员决定发言，添加消息')
+        // 审判员发言
+        addMessage('judge', '审判员', judgeResponse, parseFloat(duration))
         
-        console.log('[辩论流程] 法官发言完成，继续正常的发言顺序')
-        // 法官发言后，继续正常的发言顺序
+        console.log('[辩论流程] 审判员发言完成，继续正常的发言顺序')
+        // 审判员发言后，继续正常的发言顺序
         // 注意：在extractNextSpeakerFromJudgeSpeech中可能会调用generateAiResponse，会设置新的状态
         await extractNextSpeakerFromJudgeSpeech(judgeResponse)
         console.log('[辩论流程] 继续正常发言顺序完成')
       } else {
-        console.log('[辩论流程] 法官决定不发言，继续轮流发言')
-        // 法官不发言，由原告和被告轮流发言
+        console.log('[辩论流程] 审判员决定不发言，继续轮流发言')
+        // 审判员不发言，由公诉人和辩护人轮流发言
         await continueAlternatingDebate()
       }
     } else {
       console.error('[辩论流程] AI服务返回错误:', response.message)
     }
   } catch (error) {
-    console.error('[辩论流程] 法官判断失败:', error)
+    console.error('[辩论流程] 审判员判断失败:', error)
     // 如果判断失败，默认继续轮流发言
     await continueAlternatingDebate()
   } finally {
     // 重置生成状态和发言角色
     // 注意：如果extractNextSpeakerFromJudgeSpeech中调用了generateAiResponse，那个函数会设置新的状态
     // 所以这里需要确保状态被正确重置
-    console.log('[辩论流程] 重置法官发言状态')
+    console.log('[辩论流程] 重置审判员发言状态')
     isGenerating.value = false
     currentSpeakingRole.value = ''
-    console.log('[辩论流程] 检查法官是否应该发言 - 结束，状态已重置')
+    console.log('[辩论流程] 检查审判员是否应该发言 - 结束，状态已重置')
   }
 }
 
-// 从法官发言中提取下一个发言人（已修改：法官不再有指定发言的权力，直接继续正常发言顺序）
+// 从审判员发言中提取下一个发言人（已修改：审判员不再有指定发言的权力，直接继续正常发言顺序）
 const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
-  console.log('[辩论流程] 法官发言完成，继续正常的发言顺序 - 开始')
-  console.log('[辩论流程] 法官发言内容预览:', judgeSpeech.substring(0, 200))
+  console.log('[辩论流程] 审判员发言完成，继续正常的发言顺序 - 开始')
+  console.log('[辩论流程] 审判员发言内容预览:', judgeSpeech.substring(0, 200))
   console.log('[辩论流程] 用户身份:', userIdentity.value)
   
   // 确保状态已重置
@@ -878,62 +878,62 @@ const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
   currentSpeakingRole.value = ''
   console.log('[辩论流程] 重置状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
   
-  // 法官介入不影响发言顺序，直接继续原告和被告轮流发言
-  console.log('[辩论流程] 法官不再有指定发言的权力，按照正常发言顺序继续')
+  // 审判员介入不影响发言顺序，直接继续公诉人和辩护人轮流发言
+  console.log('[辩论流程] 审判员不再有指定发言的权力，按照正常发言顺序继续')
   await nextTick() // 确保状态更新已生效
   await continueAlternatingDebate()
   console.log('[辩论流程] 继续正常发言顺序 - 结束')
 }
 
-// 决定下一个发言人（法官发言后调用）
+// 决定下一个发言人（审判员发言后调用）
 const decideNextSpeaker = async () => {
   // 获取最后一条消息的角色
   const lastMessage = messages.value[messages.value.length - 1]
   const lastRole = lastMessage.role
   
-  // 如果最后是法官发言，根据对话历史决定下一个发言人
+  // 如果最后是审判员发言，根据对话历史决定下一个发言人
   if (lastRole === 'judge') {
-    // 简单逻辑：如果最后是原告发言，下一个是被告；反之亦然
+    // 简单逻辑：如果最后是公诉人发言，下一个是辩护人；反之亦然
     const plaintiffMessages = messages.value.filter(m => m.role === 'plaintiff')
     const defendantMessages = messages.value.filter(m => m.role === 'defendant')
     
     if (plaintiffMessages.length <= defendantMessages.length) {
-      // 原告发言次数少，下一个是原告
+      // 公诉人发言次数少，下一个是公诉人
       if (userIdentity.value === 'plaintiff') {
         // 轮到用户发言，不需要生成AI回复
         return
       } else {
-        // 用户是被告，下一个是原告（AI发言）
-        // 法官发言后，AI回复后不检查法官，等待用户发言
+        // 用户是辩护人，下一个是公诉人（AI发言）
+        // 审判员发言后，AI回复后不检查审判员，等待用户发言
         await generateAiResponse('plaintiff', '', false, false)
       }
     } else {
-      // 被告发言次数少，下一个是被告
+      // 辩护人发言次数少，下一个是辩护人
       if (userIdentity.value === 'defendant') {
         // 轮到用户发言，不需要生成AI回复
         return
       } else {
-        // 用户是原告，下一个是被告（AI发言）
-        // 法官发言后，AI回复后不检查法官，等待用户发言
+        // 用户是公诉人，下一个是辩护人（AI发言）
+        // 审判员发言后，AI回复后不检查审判员，等待用户发言
         await generateAiResponse('defendant', '', false, false)
       }
     }
   }
 }
 
-// 继续原告和被告轮流发言
+// 继续公诉人和辩护人轮流发言
 const continueAlternatingDebate = async () => {
-  console.log('[辩论流程] 继续原告和被告轮流发言 - 开始')
+  console.log('[辩论流程] 继续公诉人和辩护人轮流发言 - 开始')
   
-  // 获取最后一条非法官消息的角色
+  // 获取最后一条非审判员消息的角色
   const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
   
   if (!lastNonJudgeMessage) {
-    console.log('[辩论流程] 没有非法官消息，判断下一个发言人')
-    // 如果没有非法官消息，判断下一个应该是谁
-    // 如果用户是原告，下一个应该是原告（用户发言）
+    console.log('[辩论流程] 没有非审判员消息，判断下一个发言人')
+    // 如果没有非审判员消息，判断下一个应该是谁
+    // 如果用户是公诉人，下一个应该是公诉人（用户发言）
     if (userIdentity.value === 'plaintiff') {
-      console.log('[辩论流程] 轮到用户（原告）发言，等待用户输入')
+      console.log('[辩论流程] 轮到用户（公诉人）发言，等待用户输入')
       // 确保状态正确，让 isUserTurn 能正确计算
       isGenerating.value = false
       currentSpeakingRole.value = ''
@@ -941,22 +941,22 @@ const continueAlternatingDebate = async () => {
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
-      console.log('[辩论流程] 用户是被告，下一个是原告（AI发言）')
-      // 用户是被告，下一个是原告（AI发言）
-      // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
+      console.log('[辩论流程] 用户是辩护人，下一个是公诉人（AI发言）')
+      // 用户是辩护人，下一个是公诉人（AI发言）
+      // 审判员不发言，继续轮流发言，AI回复后需要检查审判员（因为已经完成一轮）
       await generateAiResponse('plaintiff', '', false, false)
       return
     }
   }
   
-  console.log('[辩论流程] 最后一条非法官消息 - 角色:', lastNonJudgeMessage.role)
+  console.log('[辩论流程] 最后一条非审判员消息 - 角色:', lastNonJudgeMessage.role)
   
-  // 如果最后是原告发言，下一个是被告；反之亦然
+  // 如果最后是公诉人发言，下一个是辩护人；反之亦然
   if (lastNonJudgeMessage.role === 'plaintiff') {
-    console.log('[辩论流程] 最后是原告发言，下一个是被告')
-    // 下一个是被告
+    console.log('[辩论流程] 最后是公诉人发言，下一个是辩护人')
+    // 下一个是辩护人
     if (userIdentity.value === 'defendant') {
-      console.log('[辩论流程] 轮到用户（被告）发言，等待用户输入')
+      console.log('[辩论流程] 轮到用户（辩护人）发言，等待用户输入')
       // 确保状态正确，让 isUserTurn 能正确计算
       isGenerating.value = false
       currentSpeakingRole.value = ''
@@ -964,16 +964,16 @@ const continueAlternatingDebate = async () => {
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
-      console.log('[辩论流程] 用户是原告，下一个是被告（AI发言）')
-      // 用户是原告，下一个是被告（AI发言）
-      // 法官不发言，继续轮流发言，AI回复后会自动检查法官
+      console.log('[辩论流程] 用户是公诉人，下一个是辩护人（AI发言）')
+      // 用户是公诉人，下一个是辩护人（AI发言）
+      // 审判员不发言，继续轮流发言，AI回复后会自动检查审判员
       await generateAiResponse('defendant', '', false, false)
     }
   } else {
-    console.log('[辩论流程] 最后是被告发言，下一个是原告')
-    // 下一个是原告
+    console.log('[辩论流程] 最后是辩护人发言，下一个是公诉人')
+    // 下一个是公诉人
     if (userIdentity.value === 'plaintiff') {
-      console.log('[辩论流程] 轮到用户（原告）发言，等待用户输入')
+      console.log('[辩论流程] 轮到用户（公诉人）发言，等待用户输入')
       // 确保状态正确，让 isUserTurn 能正确计算
       isGenerating.value = false
       currentSpeakingRole.value = ''
@@ -981,13 +981,13 @@ const continueAlternatingDebate = async () => {
       // 轮到用户发言，不需要生成AI回复
       return
     } else {
-      console.log('[辩论流程] 用户是被告，下一个是原告（AI发言）')
-      // 用户是被告，下一个是原告（AI发言）
-      // 法官不发言，继续轮流发言，AI回复后需要检查法官（因为已经完成一轮）
+      console.log('[辩论流程] 用户是辩护人，下一个是公诉人（AI发言）')
+      // 用户是辩护人，下一个是公诉人（AI发言）
+      // 审判员不发言，继续轮流发言，AI回复后需要检查审判员（因为已经完成一轮）
       await generateAiResponse('plaintiff', '', false, false)
     }
   }
-  console.log('[辩论流程] 继续原告和被告轮流发言 - 结束')
+  console.log('[辩论流程] 继续公诉人和辩护人轮流发言 - 结束')
 }
 
 // 生成AI回复
@@ -1004,11 +1004,11 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
   isGenerating.value = true
   
   // 更新当前发言角色
-  const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
+  const roleName = role === 'judge' ? '审判员' : (role === 'plaintiff' ? '公诉人' : '辩护人')
   currentSpeakingRole.value = roleName
   console.log('[辩论流程] 设置发言角色:', roleName)
   
-  // 用于保存首次法官发言的文本，以便在 finally 块中使用
+  // 用于保存首次审判员发言的文本，以便在 finally 块中使用
   let firstJudgeSpeechText = null
   
   // 记录开始时间
@@ -1028,7 +1028,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
     if (prompt) {
       messageHistory.push({
         role: role,
-        name: role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告'),
+        name: role === 'judge' ? '审判员' : (role === 'plaintiff' ? '公诉人' : '辩护人'),
         text: prompt
       })
       console.log('[辩论流程] 添加prompt到消息历史')
@@ -1045,7 +1045,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
       judgeType: selectedJudgeType.value || 'neutral',
       caseDescription: background, // 使用完整的background，包含所有庭前准备资料
       opponentStrategy: opponentStrategy.value || 'balanced', // 对方AI律师的辩论策略
-      isFirstJudgeSpeech: isFirstJudgeSpeech // 标记是否为首次法官发言
+      isFirstJudgeSpeech: isFirstJudgeSpeech // 标记是否为首次审判员发言
     }, {
       timeout: 0 // 取消超时限制，允许AI生成长时间运行
     })
@@ -1056,15 +1056,15 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
     
     if (response.code === 200 && response.data) {
       const aiText = response.data
-      const roleName = role === 'judge' ? '法官' : (role === 'plaintiff' ? '原告' : '被告')
+      const roleName = role === 'judge' ? '审判员' : (role === 'plaintiff' ? '公诉人' : '辩护人')
       console.log('[辩论流程] AI生成成功，角色:', roleName, ', 内容长度:', aiText.length, ', 耗时:', duration, '秒, 预览:', aiText.substring(0, 100))
       
       addMessage(role, roleName, aiText, parseFloat(duration))
       
-      // 如果是首次法官发言，保存文本以便后续处理
+      // 如果是首次审判员发言，保存文本以便后续处理
       if (isFirstJudgeSpeech && role === 'judge') {
         firstJudgeSpeechText = aiText
-        console.log('[辩论流程] 保存首次法官发言文本')
+        console.log('[辩论流程] 保存首次审判员发言文本')
       }
       
       // 检查是否应该结束庭审
@@ -1096,24 +1096,24 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
     currentSpeakingRole.value = '' // 发言结束，清空当前发言角色
     console.log('[辩论流程] 状态已重置 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
     
-    // 如果是法官发言（非首次），发言后继续正常发言顺序
-    // 注意：首次法官发言现在在 startDebate 中直接处理，不再调用 generateAiResponse
+    // 如果是审判员发言（非首次），发言后继续正常发言顺序
+    // 注意：首次审判员发言现在在 startDebate 中直接处理，不再调用 generateAiResponse
     if (role === 'judge' && !isFirstJudgeSpeech) {
-      console.log('[辩论流程] 法官发言完成（非首次），继续正常发言顺序')
+      console.log('[辩论流程] 审判员发言完成（非首次），继续正常发言顺序')
       await nextTick()
-      // 获取最后一条消息（应该是法官发言）
+      // 获取最后一条消息（应该是审判员发言）
       const lastMessage = messages.value[messages.value.length - 1]
       if (lastMessage && lastMessage.role === 'judge') {
         await extractNextSpeakerFromJudgeSpeech(lastMessage.text)
       }
     } else if (role === 'plaintiff' || role === 'defendant') {
-      // 每次发言结束后，都检查法官是否需要介入
-      // checkJudgeShouldSpeak 内部会判断是否满足硬性条件（距离上次法官发言后，至少完成一轮）
-      console.log('[辩论流程] AI回复完成，检查法官是否需要介入')
+      // 每次发言结束后，都检查审判员是否需要介入
+      // checkJudgeShouldSpeak 内部会判断是否满足硬性条件（距离上次审判员发言后，至少完成一轮）
+      console.log('[辩论流程] AI回复完成，检查审判员是否需要介入')
       await nextTick()
       await checkJudgeShouldSpeak()
     } else if (role === 'judge') {
-      console.log('[辩论流程] 法官发言完成（非首次），状态已重置')
+      console.log('[辩论流程] 审判员发言完成（非首次），状态已重置')
     }
     console.log('[辩论流程] 生成AI回复 - 结束')
   }
@@ -1184,19 +1184,19 @@ const isUserTurn = computed(() => {
   
   // 获取最后一条消息
   if (messages.value.length === 0) {
-    // 如果还没有消息，默认由法官开始，用户等待
+    // 如果还没有消息，默认由审判员开始，用户等待
     return false
   }
   
   const lastMessage = messages.value[messages.value.length - 1]
   const lastRole = lastMessage.role
   
-  // 如果最后是法官发言，法官不再有指定发言的权力，按照正常发言顺序判断
+  // 如果最后是审判员发言，审判员不再有指定发言的权力，按照正常发言顺序判断
   if (lastRole === 'judge') {
-    // 找到最后一条非法官消息，按照正常发言顺序判断
+    // 找到最后一条非审判员消息，按照正常发言顺序判断
     const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
     if (!lastNonJudgeMessage) {
-      // 如果没有非法官消息，默认由原告开始
+      // 如果没有非审判员消息，默认由公诉人开始
       return userIdentity.value === 'plaintiff'
     }
     // 如果最后是对方发言，轮到用户发言
@@ -1217,7 +1217,7 @@ const isUserTurn = computed(() => {
     return true
   }
   
-  // 如果最后是用户自己发言，需要等待对方或法官
+  // 如果最后是用户自己发言，需要等待对方或审判员
   if (lastRole === userIdentity.value) {
     return false
   }
@@ -1228,41 +1228,41 @@ const isUserTurn = computed(() => {
 // 获取下一个发言人的名称
 const nextSpeakerName = computed(() => {
   if (!debateStarted.value || messages.value.length === 0) {
-    return '法官'
+    return '审判员'
   }
   
   const lastMessage = messages.value[messages.value.length - 1]
   const lastRole = lastMessage.role
   
-  // 如果最后是法官发言，法官不再有指定发言的权力，按照正常发言顺序判断
+  // 如果最后是审判员发言，审判员不再有指定发言的权力，按照正常发言顺序判断
   if (lastRole === 'judge') {
-    // 找到最后一条非法官消息，按照正常发言顺序判断
+    // 找到最后一条非审判员消息，按照正常发言顺序判断
     const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
     if (!lastNonJudgeMessage) {
-      // 如果没有非法官消息，默认由原告开始
-      return '原告'
+      // 如果没有非审判员消息，默认由公诉人开始
+      return '公诉人'
     }
-    // 如果最后是原告发言，下一个是被告；反之亦然
+    // 如果最后是公诉人发言，下一个是辩护人；反之亦然
     if (lastNonJudgeMessage.role === 'plaintiff') {
-      return '被告'
+      return '辩护人'
     } else if (lastNonJudgeMessage.role === 'defendant') {
-      return '原告'
+      return '公诉人'
     }
-    return '法官'
+    return '审判员'
   }
   
   // 如果最后是用户发言，下一个是对方
   if (lastRole === userIdentity.value) {
-    return userIdentity.value === 'plaintiff' ? '被告' : '原告'
+    return userIdentity.value === 'plaintiff' ? '辩护人' : '公诉人'
   }
   
   // 如果最后是对方发言，下一个应该是用户
   const opponentRole = userIdentity.value === 'plaintiff' ? 'defendant' : 'plaintiff'
   if (lastRole === opponentRole) {
-    return userIdentity.value === 'plaintiff' ? '原告' : '被告'
+    return userIdentity.value === 'plaintiff' ? '公诉人' : '辩护人'
   }
   
-  return '法官'
+  return '审判员'
 })
 
 // 生成判决结果
@@ -1333,7 +1333,7 @@ const handleResetDebate = async () => {
   }
 }
 
-// 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
+// 监听路由变化，如果从其他页面进入且已选择审判员类型，自动开始
 // 初始化模型
 const initModel = async () => {
   try {
@@ -1490,7 +1490,7 @@ const loadDebateMessages = async () => {
   }
 }
 
-// 监听路由变化，如果从其他页面进入且已选择法官类型，自动开始
+// 监听路由变化，如果从其他页面进入且已选择审判员类型，自动开始
 onMounted(async () => {
   // 进入辩论阶段时，自动初始化模型
   initModel()
@@ -1649,7 +1649,7 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 法官类型显示 */
+/* 审判员类型显示 */
 .judge-display-section {
   background: #f5f7fa;
   border-radius: 8px;
@@ -1830,7 +1830,7 @@ onUnmounted(() => {
   }
 }
 
-/* 原告：左边布局 */
+/* 公诉人：左边布局 */
 .message-plaintiff {
   justify-content: flex-start;
   align-items: flex-start;
@@ -1869,7 +1869,7 @@ onUnmounted(() => {
   font-size: 10px;
 }
 
-/* 法官：中间布局 */
+/* 审判员：中间布局 */
 .message-judge {
   justify-content: center;
   align-items: center;
@@ -1912,7 +1912,7 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-/* 被告：右边布局 */
+/* 辩护人：右边布局 */
 .message-defendant {
   justify-content: flex-end;
   align-items: flex-start;

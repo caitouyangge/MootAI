@@ -31,7 +31,7 @@ public class AiService {
      * @param userIdentity 用户身份（plaintiff 或 defendant）
      * @param currentRole 当前角色（judge, plaintiff, defendant）
      * @param messages 对话历史
-     * @param judgeType 法官类型
+     * @param judgeType 审判员类型
      * @param caseDescription 案件描述
      * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
      * @return AI生成的回复
@@ -104,7 +104,7 @@ public class AiService {
      * @param userIdentity 用户身份
      * @param currentRole 当前角色
      * @param messages 对话历史
-     * @param judgeType 法官类型
+     * @param judgeType 审判员类型
      * @param caseDescription 案件描述（现在包含完整的庭前准备资料）
      * @param opponentStrategy 对方AI律师的辩论策略
      * @return 训练数据格式的请求体
@@ -136,7 +136,7 @@ public class AiService {
         String context = convertMessagesToContext(messages);
         requestBody.put("context", context);
         
-        // 4. 转换 instruction（角色指令，包含法官类型、诉讼策略等）
+        // 4. 转换 instruction（角色指令，包含审判员类型、诉讼策略等）
         String instruction = buildInstruction(currentRole, judgeType, userIdentity, opponentStrategy);
         requestBody.put("instruction", instruction);
         
@@ -154,9 +154,9 @@ public class AiService {
             case "judge":
                 return "审判员";
             case "plaintiff":
-                return "原告";
+                return "公诉人";
             case "defendant":
-                return "被告";
+                return "辩护人";
             default:
                 return role;
         }
@@ -191,11 +191,11 @@ public class AiService {
     
     /**
      * 构建instruction（角色指令）
-     * 包含法官类型、诉讼策略等信息
-     * 对于法官角色，法官类型会加入角色提示词中
+     * 包含审判员类型、诉讼策略等信息
+     * 对于审判员角色，审判员类型会加入角色提示词中
      * 
      * @param currentRole 当前角色（judge, plaintiff, defendant）
-     * @param judgeType 法官类型
+     * @param judgeType 审判员类型
      * @param userIdentity 用户身份（plaintiff 或 defendant）
      * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
      */
@@ -203,37 +203,37 @@ public class AiService {
         StringBuilder instruction = new StringBuilder();
         
         if ("judge".equalsIgnoreCase(currentRole)) {
-            // 法官角色的instruction
+            // 审判员角色的instruction
             if (judgeType != null && !judgeType.isEmpty()) {
                 switch (judgeType) {
                     case "professional":
-                        instruction.append("专业型法官：讲话简洁，业务熟练，判决果断。");
+                        instruction.append("专业型审判员：讲话简洁，业务熟练，判决果断。");
                         break;
                     case "strong":
-                        instruction.append("强势型法官：专业能力出众，细节能力强。");
+                        instruction.append("强势型审判员：专业能力出众，细节能力强。");
                         break;
                     case "partial-plaintiff":
-                        instruction.append("偏袒型法官：习惯对原告宽容。");
+                        instruction.append("偏袒型审判员：习惯对公诉人宽容。");
                         break;
                     case "partial-defendant":
-                        instruction.append("偏袒型法官：习惯对被告宽容。");
+                        instruction.append("偏袒型审判员：习惯对辩护人宽容。");
                         break;
                     case "neutral":
                     default:
-                        instruction.append("中立型法官：保持中立，注重程序公正。");
+                        instruction.append("中立型审判员：保持中立，注重程序公正。");
                         break;
                 }
                 instruction.append("\n");
             }
             
             instruction.append("审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。");
-            instruction.append("\n约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；仅审判员/原告/被告可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。");
+            instruction.append("\n约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。");
         } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
-            instruction.append("原告代理律师：维护权益；提出诉讼请求；提供证据理由；回应被告；围绕焦点举证质证。");
+            instruction.append("公诉人：行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节。");
             String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy);
             instruction.append("\n策略：").append(strategy);
         } else if ("defendant".equalsIgnoreCase(currentRole)) {
-            instruction.append("被告代理律师：进行辩护；反驳指控；提供有利证据；质疑原告证据；争取从轻减轻。");
+            instruction.append("辩护人：维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻。");
             String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy);
             instruction.append("\n策略：").append(strategy);
         } else {

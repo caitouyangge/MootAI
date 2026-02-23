@@ -27,7 +27,7 @@ public class DebateController {
         log.info("========== 收到辩论生成请求 ==========");
         log.info("用户身份: {}", request.getUserIdentity());
         log.info("当前角色: {}", request.getCurrentRole());
-        log.info("法官类型: {}", request.getJudgeType());
+        log.info("审判员类型: {}", request.getJudgeType());
         log.info("对方策略: {}", request.getOpponentStrategy());
         log.info("对话历史消息数: {}", request.getMessages() != null ? request.getMessages().size() : 0);
         log.info("案件描述长度: {} 字符", request.getCaseDescription() != null ? request.getCaseDescription().length() : 0);

@@ -574,14 +574,14 @@ def debate_generate_training_format(data):
     - agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
     - background: 案件背景（前面保存的案件描述）
     - context: 上下文（对话历史，用\n分隔）
-    - instruction: 角色指令（包含诉讼策略、法官类型等）
+    - instruction: 角色指令（包含诉讼策略、审判员类型等）
     - role_to_reply: 要回复的角色（可选，默认与agent_role相同）
     """
     agent_role = data.get('agent_role')  # 当前AI扮演的角色
     background = data.get('background', '')  # 案件背景（从前面保存的案件描述获取）
     context = data.get('context', '')  # 上下文（对话历史，用\n分隔）
     role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色（可选）
-    instruction = data.get('instruction', '')  # 角色指令（包含诉讼策略、法官类型等）
+    instruction = data.get('instruction', '')  # 角色指令（包含诉讼策略、审判员类型等）
     
     if not agent_role:
         return jsonify({'error': 'agent_role参数不能为空'}), 400
@@ -659,11 +659,11 @@ def debate_generate_legacy_format(data):
     user_identity = data.get('user_identity')  # 'plaintiff' 或 'defendant'
     current_role = data.get('current_role')  # 'judge', 'plaintiff', 'defendant'
     messages = data.get('messages', [])  # 对话历史
-    judge_type = data.get('judge_type', 'neutral')  # 法官类型
+    judge_type = data.get('judge_type', 'neutral')  # 审判员类型
     case_description = data.get('case_description', '')  # 案件描述（现在可能包含完整的background）
     check_mode = data.get('checkMode', False)  # 是否为判断模式
     prompt = data.get('prompt', '')  # 特殊提示词（用于判断模式）
-    is_first_judge_speech = data.get('isFirstJudgeSpeech', False)  # 是否为首次法官发言
+    is_first_judge_speech = data.get('isFirstJudgeSpeech', False)  # 是否为首次审判员发言
     user_strategy = data.get('userStrategy', 'balanced')  # 用户策略（用于AI代理模式）
     is_user_proxy = data.get('isUserProxy', False)  # 是否为用户代理模式
     
@@ -741,15 +741,15 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     Args:
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
         background: 案件背景（前面保存的案件描述）
-        instruction: 角色指令（包含诉讼策略、法官类型等）
+        instruction: 角色指令（包含诉讼策略、审判员类型等）
     """
     # 1. 添加角色定义
     role_definitions = {
         '审判员': '审判员：主持庭审，引导辩论，确保程序公正',
         '公诉人': '公诉人：代表国家行使公诉权，指控犯罪事实，出示并质证证据',
-        '辩护人': '辩护人：维护被告合法权益，针对指控提出辩护意见和反驳',
-        '原告': '原告代理律师：代表原告维护权益，提出诉讼请求，提供证据和理由',
-        '被告': '被告代理律师：代表被告进行辩护，反驳原告指控，维护被告权益'
+        '辩护人': '辩护人：维护辩护人合法权益，针对指控提出辩护意见和反驳',
+        '公诉人': '公诉人：代表国家行使公诉权，指控犯罪事实，出示并质证证据',
+        '辩护人': '辩护人：维护辩护人合法权益，针对指控提出辩护意见和反驳'
     }
     
     role_def = role_definitions.get(agent_role, f'{agent_role}')
@@ -766,9 +766,9 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
         default_instructions = {
             '审判员': '中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断',
             '公诉人': '行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节',
-            '辩护人': '维护被告权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻',
-            '原告': '维护权益；提出诉讼请求；提供证据理由；回应被告；围绕焦点举证质证',
-            '被告': '进行辩护；反驳指控；提供有利证据；质疑原告证据；争取从轻减轻'
+            '辩护人': '维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻',
+            '公诉人': '行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节',
+            '辩护人': '维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻'
         }
         default_instruction = default_instructions.get(agent_role, '保持专业严谨')
         base_prompt += f"指令：{default_instruction}\n\n"
@@ -777,9 +777,13 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n\n"
     
     # 5. 添加角色约束
-    base_prompt += "约束：仅审判员/原告/被告可发言；背景中的实体名称不是法庭角色。\n"
+    base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
     if agent_role == '审判员':
         base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。\n"
+    elif agent_role == '辩护人':
+        base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场。\n"
+    elif agent_role == '公诉人':
+        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场。\n"
     
     return base_prompt
 
@@ -865,18 +869,18 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
     """
     if current_role == 'judge':
         judge_prompts = {
-            'professional': '专业型法官：讲话简洁，业务熟练，判决果断',
-            'strong': '强势型法官：专业能力出众，细节能力强',
-            'partial-plaintiff': '偏袒型法官：习惯对原告宽容',
-            'partial-defendant': '偏袒型法官：习惯对被告宽容',
-            'neutral': '中立型法官：保持中立，注重程序公正'
+            'professional': '专业型审判员：讲话简洁，业务熟练，判决果断',
+            'strong': '强势型审判员：专业能力出众，细节能力强',
+            'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容',
+            'partial-defendant': '偏袒型审判员：习惯对辩护人宽容',
+            'neutral': '中立型审判员：保持中立，注重程序公正'
         }
         base_prompt = f"{judge_prompts.get(judge_type, judge_prompts['neutral'])}\n"
         base_prompt += "审判员：主持庭审，引导辩论，确保程序公正\n\n"
     elif current_role == 'plaintiff':
-        base_prompt = "原告代理律师：代表原告维护权益，提出诉讼请求，提供证据和理由\n\n"
+        base_prompt = "公诉人：代表国家行使公诉权，指控犯罪事实，出示并质证证据\n\n"
     elif current_role == 'defendant':
-        base_prompt = "被告代理律师：代表被告进行辩护，反驳原告指控，维护被告权益\n\n"
+        base_prompt = "辩护人：维护辩护人合法权益，针对指控提出辩护意见和反驳\n\n"
     else:
         base_prompt = ""
     
@@ -885,9 +889,13 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
     
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n"
     
-    # 为审判员角色添加特殊约束
+    # 为各角色添加特殊约束
     if current_role == 'judge':
-        base_prompt += "约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；仅审判员/原告/被告可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。\n"
+        base_prompt += "约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。\n"
+    elif current_role == 'defendant':
+        base_prompt += "约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场。\n"
+    elif current_role == 'plaintiff':
+        base_prompt += "约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场。\n"
     
     return base_prompt
 
@@ -896,8 +904,8 @@ def get_assistant_role_name(role):
     """获取助手角色名称"""
     role_map = {
         'judge': '审判员',
-        'plaintiff': '原告',
-        'defendant': '被告'
+        'plaintiff': '公诉人',
+        'defendant': '辩护人'
     }
     return role_map.get(role, '审判员')
 
@@ -938,17 +946,17 @@ def update_strategy_in_background(background, user_identity, user_strategy):
             
             # 根据用户身份更新策略
             if user_identity == 'plaintiff':
-                # 更新原告策略
+                # 更新公诉人策略
                 strategy_section = re.sub(
-                    r'原告策略：.*',
-                    f'原告策略：{strategy_desc}',
+                    r'公诉人策略：.*',
+                    f'公诉人策略：{strategy_desc}',
                     strategy_section
                 )
             else:
-                # 更新被告策略
+                # 更新辩护人策略
                 strategy_section = re.sub(
-                    r'被告策略：.*',
-                    f'被告策略：{strategy_desc}',
+                    r'辩护人策略：.*',
+                    f'辩护人策略：{strategy_desc}',
                     strategy_section
                 )
             
@@ -956,7 +964,7 @@ def update_strategy_in_background(background, user_identity, user_strategy):
             background = background.replace(match.group(0), f'【诉讼策略】\n{strategy_section}')
     else:
         # 如果不存在策略部分，添加策略部分
-        user_role_name = '原告' if user_identity == 'plaintiff' else '被告'
+        user_role_name = '公诉人' if user_identity == 'plaintiff' else '辩护人'
         strategy_text = f'\n【诉讼策略】\n{user_role_name}策略：{strategy_desc}\n'
         background += strategy_text
     
@@ -977,10 +985,10 @@ def format_messages_for_ai(messages):
             content = f"审判员：{text}"
         elif role == 'plaintiff':
             ai_role = 'user' if len(formatted) == 0 or formatted[-1].get('role') != 'user' else 'assistant'
-            content = f"原告：{text}"
+            content = f"公诉人：{text}"
         elif role == 'defendant':
             ai_role = 'user' if len(formatted) == 0 or formatted[-1].get('role') != 'user' else 'assistant'
-            content = f"被告：{text}"
+            content = f"辩护人：{text}"
         else:
             continue
         
@@ -1336,7 +1344,7 @@ def summarize_case():
             return jsonify({'error': 'file_names参数不能为空'}), 400
         
         # 构建提示词
-        identity_text = "原告" if identity == "plaintiff" else "被告"
+        identity_text = "公诉人" if identity == "plaintiff" else "辩护人"
         
         # 如果有文件内容，使用文件内容；否则只使用文件名
         if file_contents and len(file_contents) > 0:
@@ -1434,12 +1442,12 @@ def generate_verdict():
                 if msg.get('text')
             ])
         
-        system_prompt = """你是一位专业的法官，需要根据案件信息和庭审对话历史，生成一份完整的民事判决书。
+        system_prompt = """你是一位专业的审判员，需要根据案件信息和庭审对话历史，生成一份完整的民事判决书。
 
 判决书应包含以下部分：
 1. 案件基本信息（当事人信息、案由、案件编号、审理法院、审理时间等）
 2. 审理经过（起诉时间和事实、审理过程概述、当事人主要争议点）
-3. 当事人诉讼请求和答辩（原告诉讼请求、被告的答辩意见、争议的主要问题）
+3. 当事人诉讼请求和答辩（公诉人的诉讼请求、辩护人的答辩意见、争议的主要问题）
 4. 本院查明的事实（基于案件描述和庭审对话）
 5. 本院认为（法律适用分析、对争议问题的法律判断、责任认定和理由）
 
