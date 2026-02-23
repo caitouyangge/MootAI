@@ -109,61 +109,28 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
     case_background = case_obj.get("case_background", "") or ""
 
     prompt = (
-        "你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。\n\n"
-        "角色定义：\n"
-        f"- 角色：{role_position}\n"
-        f"- 核心职责：{', '.join(core_obligations)}\n"
-        f"- 策略重点：{', '.join(strategic_focus)}\n"
-        f"- 道德边界：{', '.join(ethical_boundaries)}\n\n"
-        "案件背景：\n"
-        f"{case_background}\n\n"
-        "请根据你的角色定位，在法庭辩论中：\n"
-        "1. 根据对话历史理解当前辩论阶段和焦点\n"
-        "2. 根据角色标记（审判员/公诉人/辩护人）切换相应的语言风格\n"
-        "3. 遵循法庭辩论的逻辑顺序和程序规范\n"
-        "4. 基于事实和法律条文进行专业辩论"
+        f"角色：{role_position}\n"
+        f"职责：{', '.join(core_obligations)}\n"
+        f"策略：{', '.join(strategic_focus)}\n"
+        f"边界：{', '.join(ethical_boundaries)}\n\n"
+        f"案件背景：\n{case_background}\n\n"
+        "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。"
     )
     
     # 为审判员角色添加特殊约束
     if role_position == '审判员':
-        prompt += "\n\n【重要约束】\n"
-        prompt += "1. 作为审判员，你绝对不能让自己发言，不能说\"请审判员发言\"、\"请审判员继续\"等类似的话。\n"
-        prompt += "2. 【重要】你不再有指定下一个发言人的权力。发言顺序由系统自动管理，原告和被告会按照正常顺序轮流发言。\n"
-        prompt += "   你不需要说\"请原告继续\"或\"请被告继续\"等指定发言人的话，发言顺序会自动进行。\n"
-        prompt += "3. 法庭辩论中只有\"审判员\"、\"原告\"、\"被告\"三个角色可以发言，案件背景中的机构名称、公司名称等不是法庭角色。\n"
-        prompt += "4. 【重要】当辩论阶段结束时，你必须发表完整的结束语，不能只说\"辩论阶段结束\"。\n"
-        prompt += "   结束语应包含：对双方辩论内容的总结、对争议焦点的归纳、对从宽从重情节的说明、\n"
-        prompt += "   对案件复杂性的认识、以及表明将依法公正判决的态度。\n"
-        prompt += "   示例格式：\"双方围绕[争议焦点]等问题已进行多轮充分辩论。法庭注意到，[从宽情节]，\n"
-        prompt += "   但[从重情节]的事实清楚，社会危害性[评价]。如何在依法惩处与合理考量其特殊情况之间作出裁量，\n"
-        prompt += "   本庭将严格依照法律规定，结合全案事实与证据，作出公正判决。辩论阶段结束。\"\n"
+        prompt += "\n约束：禁止自指发言；不指定发言人（系统自动管理）；仅审判员/原告/被告可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。"
     
     return prompt
 
 
 def add_no_thought_constraint(system_prompt: str, assistant_role: str = "") -> str:
-    role_line = f"\n\n你始终扮演：{assistant_role}。" if assistant_role else ""
+    role_line = f"\n角色：{assistant_role}。" if assistant_role else ""
     role_prefix = f"{assistant_role}：" if assistant_role else "公诉人："
     return (
         system_prompt.strip()
         + role_line
-        + "\n\n【输出要求（必须严格遵守）】\n"
-        + "1) 只输出你在法庭上的\"最终发言\"，绝对不要输出思考过程、分析过程、计划、旁白、元叙述。\n"
-        + "2) 禁止出现以下任何内容：\n"
-        + "   - 思考过程（如\"我需要\"、\"我将\"、\"我应该\"、\"首先\"、\"接下来\"）\n"
-        + "   - 计划或列表（如\"1. 语气要...\"、\"2. 包含以下要素\"）\n"
-        + "   - 元叙述（如\"给出一份符合要求的发言\"、\"构建一段\"）\n"
-        + "   - 自述性语言（如\"让我\"、\"我现在需要\"、\"请根据以上要求\"）\n"
-        + "3) 直接进入陈述或反驳，语言风格贴合法庭发言。\n"
-        + f"4) 必须以\"{role_prefix}\"开头输出，且不要在开头自述你在做什么。\n"
-        + "5) 只写最终发言内容，不要写任何过程性、计划性、分析性的文字。\n"
-        + f"6) 输出格式必须严格按照以下格式，不能有任何偏差：\n"
-        + f"   开始标签：必须完整输出左尖括号、final、右尖括号，即：<final>\n"
-        + f"   内容：{role_prefix}你的最终发言内容\n"
-        + f"   结束标签：必须完整输出左尖括号、斜杠、final、右尖括号，即：</final>\n"
-        + f"   完整示例：<final>{role_prefix}你的最终发言内容</final>\n"
-        + f"   重要：开始标签必须是完整的 <final>（包含左尖括号<、字母final、右尖括号>），不能缺少任何字符。\n"
-        + "7) 如果输出不符合要求，系统会自动重试，请确保每次输出都是最终发言，不要包含任何思考过程。"
+        + f"\n输出要求：仅输出最终发言，禁止思考/计划/元叙述/自述。直接陈述，以\"{role_prefix}\"开头。格式：<final>{role_prefix}发言内容</final>"
     )
 
 

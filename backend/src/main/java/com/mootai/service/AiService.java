@@ -204,90 +204,40 @@ public class AiService {
         
         if ("judge".equalsIgnoreCase(currentRole)) {
             // 法官角色的instruction
-            // 首先添加法官类型特征（这是最重要的，会直接影响法官的发言风格）
             if (judgeType != null && !judgeType.isEmpty()) {
                 switch (judgeType) {
                     case "professional":
-                        instruction.append("你是一位专业型法官，讲话简洁，业务熟练，判决果断。\n\n");
+                        instruction.append("专业型法官：讲话简洁，业务熟练，判决果断。");
                         break;
                     case "strong":
-                        instruction.append("你是一位强势型法官，专业能力出众，细节能力强。\n\n");
+                        instruction.append("强势型法官：专业能力出众，细节能力强。");
                         break;
                     case "partial-plaintiff":
-                        instruction.append("你是一位偏袒型法官，习惯对原告宽容。\n\n");
+                        instruction.append("偏袒型法官：习惯对原告宽容。");
                         break;
                     case "partial-defendant":
-                        instruction.append("你是一位偏袒型法官，习惯对被告宽容。\n\n");
+                        instruction.append("偏袒型法官：习惯对被告宽容。");
                         break;
                     case "neutral":
                     default:
-                        instruction.append("你是一位中立型法官，保持中立，注重程序公正。\n\n");
+                        instruction.append("中立型法官：保持中立，注重程序公正。");
                         break;
                 }
+                instruction.append("\n");
             }
             
-            // 然后添加法官职责
-            instruction.append("作为审判员，你需要：\n");
-            instruction.append("1. 保持中立、客观、公正的立场\n");
-            instruction.append("2. 引导庭审程序有序进行，控制庭审节奏\n");
-            instruction.append("3. 对争议焦点进行归纳和总结\n");
-            instruction.append("4. 确保各方充分表达意见，维护庭审秩序\n");
-            instruction.append("5. 基于事实和法律进行判断，不偏不倚\n");
-            instruction.append("6. 【首次发言】在开庭时，如果对话历史为空（还没有任何发言），你必须首先发言，宣布开庭并引导原告发言。例如：\"现在开庭。请原告陈述诉讼请求和事实理由。\"\n");
-            instruction.append("7. 【绝对禁止】如果对话历史不为空，说明庭审已经开始了，你绝对不能再重复说以下任何内容：\n");
-            instruction.append("   - \"现在开庭\"\n");
-            instruction.append("   - \"法庭辩论阶段开始\"\n");
-            instruction.append("   - \"现在开始\"\n");
-            instruction.append("   - \"开始法庭辩论\"\n");
-            instruction.append("   - \"进入法庭辩论阶段\"\n");
-            instruction.append("   - \"现在进入法庭辩论\"\n");
-            instruction.append("   - 任何包含\"开始\"、\"开庭\"、\"进入\"等表示开始的词语\n");
-            instruction.append("   你应该根据对话历史判断当前庭审阶段，直接进行必要的介入（如归纳争议焦点、纠正程序错误等），不要说重复的套话。如果违反此规定，系统将拒绝你的发言。\n");
-            instruction.append("8. 【重要】法庭辩论的发言顺序：原告先发言，然后被告发言，每完成一轮（原告+被告）后，你判断是否需要介入。\n");
-            instruction.append("9. 【硬性要求】介入的硬性条件：必须确保双方已经进行了至少一轮完整的对话（原告发言+被告发言），否则绝对不能介入。如果对话历史中最后一条是原告发言，说明被告还没有回复，此时绝对不能介入，必须等待被告发言后再判断。\n");
-            instruction.append("10. 【介入条件】只有在满足硬性条件（至少完成一轮）的前提下，且出现以下情况时才需要介入：\n");
-            instruction.append("   - 需要归纳争议焦点时\n");
-            instruction.append("   - 需要纠正程序错误时\n");
-            instruction.append("   - 需要制止不当言论时\n");
-            instruction.append("   - 需要引导辩论方向时\n");
-            instruction.append("   - 辩论阶段结束时\n");
-            instruction.append("11. 【重要】即使满足硬性条件和介入条件，也要尽量减少介入。非必要不介入，不说废话。如果双方辩论正常进行，没有程序问题，没有需要纠正的地方，就不要发言。让原告和被告继续轮流发言即可。\n");
-            instruction.append("12. 【重要】如果你决定发言，发言内容必须简洁、专业、有针对性，不要说套话、空话。你不再有指定下一个发言人的权力，发言顺序由系统自动管理。\n");
-            instruction.append("13. 【重要】如果不需要发言，只输出\"不需要发言\"，然后由原告和被告继续轮流发言。\n");
-            instruction.append("14. 【重要】法庭辩论中只有\"审判员\"、\"原告\"、\"被告\"三个角色可以发言。案件背景中可能包含各种实体名称（如机构名称、公司名称等），但这些不是法庭角色，不能作为发言人的身份。\n");
-            instruction.append("15. 【重要】作为审判员，你绝对不能让自己发言，不能说\"请审判员发言\"、\"请审判员继续\"等类似的话。你不再有指定下一个发言人的权力，发言顺序由系统自动管理，原告和被告会按照正常顺序轮流发言。\n");
-            instruction.append("16. 【重要】当辩论阶段结束时，你必须发表完整的结束语，不能只说\"辩论阶段结束\"。结束语应包含：对双方辩论内容的总结、对争议焦点的归纳、对从宽从重情节的说明、对案件复杂性的认识、以及表明将依法公正判决的态度。示例格式：\"双方围绕[争议焦点]等问题已进行多轮充分辩论。法庭注意到，[从宽情节]，但[从重情节]的事实清楚，社会危害性[评价]。如何在依法惩处与合理考量其特殊情况之间作出裁量，本庭将严格依照法律规定，结合全案事实与证据，作出公正判决。辩论阶段结束。\"");
+            instruction.append("审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。");
+            instruction.append("\n约束：禁止自指发言；对话历史非空时禁止重复\"现在开庭\"等开始语；不指定发言人（系统自动管理）；仅审判员/原告/被告可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。");
         } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
-            // 原告角色的instruction
-            instruction.append("作为原告代理律师，你需要：\n");
-            instruction.append("1. 代表原告维护权益，提出诉讼请求\n");
-            instruction.append("2. 提供证据和理由支持诉讼请求\n");
-            instruction.append("3. 回应被告的答辩意见\n");
-            instruction.append("4. 围绕争议焦点组织举证质证\n");
-            instruction.append("5. 强调事实和法律依据\n\n");
-            
-            // 根据用户身份和对方策略设置策略
-            // 如果用户是原告，那么当前角色是原告时，使用默认策略（均衡策略）
-            // 如果用户是被告，那么当前角色是原告时，使用对方策略（opponentStrategy）
+            instruction.append("原告代理律师：维护权益；提出诉讼请求；提供证据理由；回应被告；围绕焦点举证质证。");
             String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy);
-            instruction.append("诉讼策略：").append(strategy);
+            instruction.append("\n策略：").append(strategy);
         } else if ("defendant".equalsIgnoreCase(currentRole)) {
-            // 被告角色的instruction
-            instruction.append("作为被告代理律师，你需要：\n");
-            instruction.append("1. 代表被告进行辩护，反驳原告指控\n");
-            instruction.append("2. 提出有利于被告的证据和事实\n");
-            instruction.append("3. 质疑原告证据的合法性、真实性、关联性\n");
-            instruction.append("4. 维护被告权益\n");
-            instruction.append("5. 争取从轻、减轻或免除责任\n\n");
-            
-            // 根据用户身份和对方策略设置策略
-            // 如果用户是被告，那么当前角色是被告时，使用默认策略（均衡策略）
-            // 如果用户是原告，那么当前角色是被告时，使用对方策略（opponentStrategy）
+            instruction.append("被告代理律师：进行辩护；反驳指控；提供有利证据；质疑原告证据；争取从轻减轻。");
             String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy);
-            instruction.append("诉讼策略：").append(strategy);
+            instruction.append("\n策略：").append(strategy);
         } else {
-            // 默认instruction
-            instruction.append("请根据你的角色定位，在法庭辩论中保持专业严谨。");
+            instruction.append("保持专业严谨。");
         }
         
         return instruction.toString();
@@ -311,20 +261,19 @@ public class AiService {
         if (opponentStrategy != null && !opponentStrategy.isEmpty()) {
             switch (opponentStrategy.toLowerCase()) {
                 case "aggressive":
-                    return "激进策略：采取强硬立场，积极进攻，不轻易让步。主动质疑对方证据，强调己方优势，对争议点进行深入辩论。";
+                    return "激进：强硬立场，积极进攻，不轻易让步，质疑对方证据，强调己方优势";
                 case "conservative":
-                    return "保守策略：优先考虑通过调解解决争议，主张较为温和，可适当让步。避免过度激化矛盾，保持协商空间。";
+                    return "保守：优先调解，主张温和，可适当让步，避免激化矛盾";
                 case "balanced":
-                    return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
+                    return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
                 case "defensive":
-                    return "防御策略：重点防守，回应对方质疑，保护己方核心利益。谨慎应对争议点，避免主动进攻。";
+                    return "防御：重点防守，回应质疑，保护核心利益，避免主动进攻";
                 default:
-                    return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
+                    return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
             }
         }
         
-        // 默认返回均衡策略
-        return "均衡策略：主张适中，准备充分的证据，但不过度激化矛盾。保持协商空间，平衡攻守。";
+        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
     }
     
     /**
