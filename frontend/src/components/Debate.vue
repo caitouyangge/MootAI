@@ -59,19 +59,33 @@
     </div>
 
     <!-- 庭审对话区域 -->
-    <div class="debate-chat-section">
+    <div class="debate-chat-section" :class="{ 'debate-ended': isDebateEnded }">
       <div class="section-header">
         <h3 class="section-title">庭审现场</h3>
-        <el-button
-          v-if="debateStarted && messages.length > 0"
-          type="warning"
-          size="small"
-          class="reset-debate-btn"
-          @click="handleResetDebate"
-          :icon="Refresh"
-        >
-          重置
-        </el-button>
+        <div v-if="debateStarted && messages.length > 0" class="header-actions">
+          <el-button
+            type="primary"
+            size="small"
+            class="copy-debate-btn"
+            @click="copyDebateContent"
+            :icon="DocumentCopy"
+          >
+            复制发言
+          </el-button>
+          <el-button
+            type="warning"
+            size="small"
+            class="reset-debate-btn"
+            @click="handleResetDebate"
+            :icon="Refresh"
+          >
+            重置
+          </el-button>
+        </div>
+      </div>
+      <div v-if="isDebateEnded" class="debate-ended-notice">
+        <div class="notice-icon">🔒</div>
+        <div class="notice-text">法官已决定结束辩论，庭审现场已锁定，除重置按钮外无法交互</div>
       </div>
       <div class="chat-container" ref="chatContainer">
         <!-- 模型初始化提示 -->
@@ -115,7 +129,7 @@
                   @blur="saveEdit(index)"
                   @keydown.ctrl.enter="saveEdit(index)"
                 />
-                <div v-if="userIdentity === 'plaintiff' && editingIndex !== index" class="edit-btn-wrapper">
+                <div v-if="userIdentity === 'plaintiff' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
                   <el-button
                     text
                     type="primary"
@@ -173,7 +187,7 @@
                     @blur="saveEdit(index)"
                     @keydown.ctrl.enter="saveEdit(index)"
                   />
-                  <div v-if="userIdentity === 'defendant' && editingIndex !== index" class="edit-btn-wrapper">
+                  <div v-if="userIdentity === 'defendant' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
                     <el-button
                       text
                       type="primary"
@@ -201,7 +215,7 @@
       </div>
       
       <!-- 用户输入区域 -->
-      <div v-if="debateStarted && !debateCompleted" class="input-section">
+      <div v-if="debateStarted && !debateCompleted && !isDebateEnded" class="input-section">
         <!-- 发言状态提示 -->
         <div class="speaking-status">
           <div v-if="isGenerating" class="status-item status-generating">
@@ -300,13 +314,13 @@
         请先在庭前准备阶段完成审判员类型和策略选择
       </p>
       <el-button
-        v-if="debateCompleted"
+        v-if="debateCompleted || isDebateEnded"
         type="primary"
         size="large"
         class="generate-btn"
         @click="generateVerdict"
       >
-        生成判决书
+        生成庭后宣判
       </el-button>
     </div>
   </div>
@@ -316,7 +330,7 @@
 import { ref, onMounted, nextTick, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Loading, Warning, Refresh } from '@element-plus/icons-vue'
+import { Loading, Warning, Refresh, DocumentCopy } from '@element-plus/icons-vue'
 import { useCaseStore } from '@/stores/case'
 import request from '@/utils/request'
 
@@ -437,6 +451,7 @@ watch(opponentStrategy, () => {
 // 对话消息
 const messages = ref([])
 const debateCompleted = ref(false)
+const isDebateEnded = ref(false) // 法官决定结束辩论
 const chatContainer = ref(null)
 
 // 模型初始化状态
@@ -1082,14 +1097,16 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
         console.log('[辩论流程] 保存首次审判员发言文本')
       }
       
-      // 检查是否应该结束庭审
-      if (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭')) {
-        console.log('[辩论流程] 检测到庭审结束关键词，标记辩论完成')
+      // 检查是否应该结束庭审（法官决定结束）
+      if (role === 'judge' && (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭'))) {
+        console.log('[辩论流程] 检测到法官决定结束庭审，标记辩论结束')
+        isDebateEnded.value = true
         debateCompleted.value = true
         // 保存对话历史到localStorage，供判决书生成使用
         localStorage.setItem('debateMessages', JSON.stringify(messages.value))
         // 标记辩论完成
         localStorage.setItem('debateCompleted', 'true')
+        localStorage.setItem('isDebateEnded', 'true')
         // 立即保存到数据库（不等待防抖）
         if (caseStore.caseId) {
           clearTimeout(saveDebateMessagesTimer)
@@ -1097,6 +1114,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
         }
         // 触发完成事件
         emit('complete')
+        ElMessage.info('法官已决定结束辩论，庭审现场已锁定，请点击"生成庭后宣判"按钮')
       }
     } else {
       console.error('[辩论流程] AI服务返回错误:', response.message)
@@ -1193,7 +1211,7 @@ const addMessage = (role, name, text, duration = null) => {
 
 // 判断是否轮到用户发言
 const isUserTurn = computed(() => {
-  if (!debateStarted.value || debateCompleted.value || isGenerating.value) {
+  if (!debateStarted.value || debateCompleted.value || isDebateEnded.value || isGenerating.value) {
     return false
   }
   
@@ -1291,6 +1309,72 @@ const generateVerdict = () => {
   })
 }
 
+// 复制辩论发言内容
+const copyDebateContent = async () => {
+  if (!messages.value || messages.value.length === 0) {
+    ElMessage.warning('没有发言内容可复制')
+    return
+  }
+  
+  try {
+    // 整理发言内容为发言格式
+    let formattedContent = '【庭审辩论记录】\n\n'
+    
+    messages.value.forEach((message, index) => {
+      // 添加角色名称和发言内容
+      formattedContent += `${message.name}：${message.text}`
+      
+      // 添加时间信息
+      if (message.time) {
+        formattedContent += `\n[${message.time}]`
+      }
+      
+      // 添加AI生成耗时（如果有）
+      if (message.duration !== null && message.duration !== undefined) {
+        formattedContent += ` (生成耗时: ${message.duration}s)`
+      }
+      
+      // 每条消息之间添加空行
+      formattedContent += '\n\n'
+    })
+    
+    // 移除最后的空行
+    formattedContent = formattedContent.trim()
+    
+    // 复制到剪贴板
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(formattedContent)
+      ElMessage.success('发言内容已复制到剪贴板')
+    } else {
+      // 降级方案：使用传统的复制方法
+      const textArea = document.createElement('textarea')
+      textArea.value = formattedContent
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      textArea.style.top = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      
+      try {
+        const successful = document.execCommand('copy')
+        if (successful) {
+          ElMessage.success('发言内容已复制到剪贴板')
+        } else {
+          ElMessage.error('复制失败，请手动复制')
+        }
+      } catch (err) {
+        ElMessage.error('复制失败，请手动复制')
+      } finally {
+        document.body.removeChild(textArea)
+      }
+    }
+  } catch (error) {
+    console.error('复制发言内容失败:', error)
+    ElMessage.error('复制失败，请重试')
+  }
+}
+
 // 重置庭审对话
 const handleResetDebate = async () => {
   // 清空消息历史
@@ -1299,6 +1383,7 @@ const handleResetDebate = async () => {
   // 重置状态
   debateStarted.value = false
   debateCompleted.value = false
+  isDebateEnded.value = false
   userInput.value = ''
   currentSpeakingRole.value = ''
   isGenerating.value = false
@@ -1309,6 +1394,7 @@ const handleResetDebate = async () => {
   try {
     localStorage.removeItem('debateMessages')
     localStorage.removeItem('debateCompleted')
+    localStorage.removeItem('isDebateEnded')
   } catch (e) {
     console.error('清除localStorage失败:', e)
   }
@@ -1484,8 +1570,12 @@ const loadDebateMessages = async () => {
       
       // 检查是否已完成辩论
       const isCompleted = localStorage.getItem('debateCompleted') === 'true'
+      const isEnded = localStorage.getItem('isDebateEnded') === 'true'
       if (isCompleted) {
         debateCompleted.value = true
+      }
+      if (isEnded) {
+        isDebateEnded.value = true
       }
     }
   } catch (error) {
@@ -1557,6 +1647,13 @@ onUnmounted(() => {
   margin-bottom: 15px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-debate-btn,
 .reset-debate-btn {
   font-size: 12px;
   padding: 6px 12px;
@@ -2241,6 +2338,48 @@ onUnmounted(() => {
   border-color: #06ad56;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+}
+
+/* 辩论结束后的样式 */
+.debate-chat-section.debate-ended {
+  position: relative;
+}
+
+.debate-chat-section.debate-ended::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.debate-ended-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+  border-radius: 8px;
+  border-left: 4px solid #ffc107;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.notice-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.notice-text {
+  flex: 1;
+  font-size: 14px;
+  color: #856404;
+  font-weight: 500;
+  line-height: 1.5;
 }
 </style>
 

@@ -421,14 +421,14 @@ public class AiService {
     }
     
     /**
-     * 生成判决书
+     * 生成判决书和点评
      * 
      * @param caseDescription 案件描述
      * @param messages 庭审对话历史
      * @param identity 用户身份
-     * @return AI生成的判决书
+     * @return 包含verdict和review的Map
      */
-    public String generateVerdict(String caseDescription, List<Map<String, Object>> messages, String identity) {
+    public Map<String, String> generateVerdict(String caseDescription, List<Map<String, Object>> messages, String identity) {
         try {
             String url = aiServiceUrl + "/api/verdict/generate";
             
@@ -480,8 +480,14 @@ public class AiService {
                 Boolean success = (Boolean) body.get("success");
                 if (Boolean.TRUE.equals(success)) {
                     String verdict = (String) body.get("verdict");
-                    log.debug("判决书生成成功，长度: {}", verdict != null ? verdict.length() : 0);
-                    return verdict;
+                    String review = (String) body.get("review");
+                    log.debug("判决书生成成功，判决长度: {}, 点评长度: {}", 
+                        verdict != null ? verdict.length() : 0,
+                        review != null ? review.length() : 0);
+                    Map<String, String> result = new HashMap<>();
+                    result.put("verdict", verdict != null ? verdict : "");
+                    result.put("review", review != null ? review : "");
+                    return result;
                 } else {
                     String error = (String) body.get("error");
                     log.error("判决书生成API返回错误: {}", error);

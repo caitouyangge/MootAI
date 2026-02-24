@@ -9,20 +9,23 @@
         @click="generateVerdict"
         :loading="loading"
       >
-        生成判决书
+        生成庭后宣判
       </el-button>
     </div>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-section">
       <ElIcon class="is-loading"><Loading /></ElIcon>
-      <p>正在生成判决书，请稍候...</p>
+      <p>正在生成判决书和点评，请稍候...</p>
     </div>
 
     <!-- 判决书内容 -->
     <div v-else-if="verdictText" class="verdict-content">
-      <!-- 如果解析成功，显示结构化内容 -->
-      <template v-if="verdictInfo.basicInfo || verdictInfo.facts">
+      <!-- 最终判决 -->
+      <div class="final-verdict-wrapper">
+        <h2 class="main-section-title">法官最终判决</h2>
+        <!-- 如果解析成功，显示结构化内容 -->
+        <template v-if="verdictInfo.basicInfo || verdictInfo.facts">
         <!-- 案件基本信息 -->
         <div v-if="verdictInfo.basicInfo" class="verdict-section">
           <h2 class="section-title">案件基本信息</h2>
@@ -97,17 +100,28 @@
         </div>
       </template>
       
-      <!-- 如果解析失败，直接显示全文 -->
-      <div v-else class="verdict-section">
-        <div class="section-content" style="white-space: pre-line;">
-          {{ verdictText }}
+        <!-- 如果解析失败，直接显示全文 -->
+        <div v-else class="verdict-section">
+          <div class="section-content" style="white-space: pre-line;">
+            {{ verdictText }}
+          </div>
+        </div>
+      </div>
+      
+      <!-- 辩论过程点评 -->
+      <div v-if="reviewText" class="review-wrapper">
+        <h2 class="main-section-title">辩论过程点评</h2>
+        <div class="verdict-section review-section">
+          <div class="section-content review-content" style="white-space: pre-line;">
+            {{ reviewText }}
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 空状态 -->
     <div v-else class="empty-section">
-      <p>点击"生成判决书"按钮生成判决书</p>
+      <p>点击"生成庭后宣判"按钮生成判决书和点评</p>
     </div>
   </div>
 </template>
@@ -151,6 +165,7 @@ const verdictInfo = ref({
 
 const loading = ref(false)
 const verdictText = ref('')
+const reviewText = ref('') // 点评内容
 
 // 解析判决书文本
 const parseVerdict = (text) => {
@@ -233,8 +248,22 @@ const generateVerdict = async () => {
     })
     
     if (response.code === 200 && response.data) {
-      parseVerdict(response.data)
-      ElMessage.success('判决书生成成功')
+      // 判断返回的是字符串还是对象
+      if (typeof response.data === 'string') {
+        // 兼容旧格式：直接是判决书文本
+        parseVerdict(response.data)
+      } else if (typeof response.data === 'object') {
+        // 新格式：包含verdict和review
+        const verdict = response.data.verdict || ''
+        const review = response.data.review || ''
+        if (verdict) {
+          parseVerdict(verdict)
+        }
+        if (review) {
+          reviewText.value = review
+        }
+      }
+      ElMessage.success('判决书和点评生成成功')
     } else {
       throw new Error(response.message || '生成判决书失败')
     }
@@ -335,6 +364,51 @@ onMounted(() => {
 
 .verdict-content {
   margin-top: 16px;
+}
+
+.final-verdict-section {
+  margin-bottom: 20px;
+  border-left: 4px solid #409eff;
+}
+
+.review-section {
+  margin-top: 20px;
+  border-left: 4px solid #67c23a;
+  background: #f0f9ff;
+}
+
+.review-content {
+  color: #333;
+  line-height: 1.8;
+}
+
+.final-verdict-wrapper {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.review-wrapper {
+  margin-top: 30px;
+  padding: 20px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  border-left: 4px solid #67c23a;
+}
+
+.main-section-title {
+  font-size: 18px;
+  color: #409eff;
+  margin: 0 0 16px 0;
+  font-weight: 700;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.review-wrapper .main-section-title {
+  color: #67c23a;
 }
 </style>
 

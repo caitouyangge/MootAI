@@ -732,11 +732,19 @@ def debate_generate_training_format(data):
     
     # 在消息列表末尾添加明确的提示，说明当前要生成的是agent_role的回复
     # 这可以防止模型误以为要生成其他角色的发言
-    formatted_messages.append({
-        'role': 'user',
-        'content': f'请以{agent_role}的身份继续发言，直接陈述观点，不要以其他角色（如审判员）的口吻提问。'
-    })
-    logger.info(f"[角色调试] 已添加角色提示消息")
+    # 优化：如果最后一条消息已经是user，则将提示合并到上一条消息中，避免连续两条user消息
+    if formatted_messages and formatted_messages[-1].get('role') == 'user':
+        # 将角色提示合并到上一条user消息中
+        last_content = formatted_messages[-1].get('content', '')
+        formatted_messages[-1]['content'] = f"{last_content}\n\n请{agent_role}继续发言，发言控制在500字左右。"
+        logger.info(f"[角色调试] 已将角色提示合并到上一条user消息")
+    else:
+        # 如果最后一条不是user，添加新的user消息
+        formatted_messages.append({
+            'role': 'user',
+            'content': f'请{agent_role}继续发言，发言控制在500字左右。'
+        })
+        logger.info(f"[角色调试] 已添加角色提示消息")
     
     # 检查模型是否在GPU上（性能关键）
     try:
@@ -761,12 +769,14 @@ def debate_generate_training_format(data):
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
-    # 使用greedy decoding（temperature=0）以获得最快速度
+    # 使用适中的temperature以获得更好的生成质量（0.3-0.5之间平衡速度和创造性）
+    # 如果temperature=0.0可能导致生成过于保守和简短
+    # 限制生成长度：500字左右 ≈ 300-350 tokens（中文字符token化更高效）
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=512,  # 优化：进一步降低到512，大幅提升速度（约500-700字足够）
-        temperature=0.0,  # 优化：使用greedy decoding（最快）
-        top_p=0.9,  # greedy时top_p会被忽略
+        max_new_tokens=512, 
+        temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
+        top_p=0.9,
         system_prompt=system_prompt,
         assistant_role=agent_role
     )
@@ -776,9 +786,12 @@ def debate_generate_training_format(data):
     logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
     
     logger.debug(f"[训练格式] 生成回复长度: {len(response)}")
+    # 记录实际生成的回复内容（用于调试）
+    logger.info(f"[训练格式] 原始回复内容: {response[:500] if len(response) > 500 else response}")
     
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
+    logger.info(f"[训练格式] 清理后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复（需要将context转换为messages格式进行检查）
     # 从context中提取历史消息
@@ -926,7 +939,7 @@ def debate_generate_legacy_format(data):
         role_name = role_name_map.get(current_role, current_role)
         formatted_messages.append({
             'role': 'user',
-            'content': f'请以{role_name}的身份继续发言，直接陈述观点，不要以其他角色（如审判员）的口吻提问。'
+            'content': f'请以{role_name}的身份继续发言，直接陈述观点，不要以其他角色（如审判员）的口吻提问。发言控制在500字左右。'
         })
         logger.info(f"[角色调试] 已添加角色提示消息: 请以{role_name}的身份继续发言")
     
@@ -939,12 +952,12 @@ def debate_generate_legacy_format(data):
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
-    # 使用greedy decoding（temperature=0）以获得最快速度
+    # 限制生成长度：500字左右 ≈ 300-350 tokens（中文字符token化更高效）
     response = model.chat(
         messages=formatted_messages,
-        max_new_tokens=512,  # 优化：进一步降低到512，大幅提升速度（约500-700字足够）
-        temperature=0.0,  # 优化：使用greedy decoding（最快）
-        top_p=0.9,  # greedy时top_p会被忽略
+        max_new_tokens=350,  # 限制为350 tokens，约对应500字左右的中文
+        temperature=0.3,  # 使用适中的temperature，平衡速度和生成质量
+        top_p=0.9,
         system_prompt=system_prompt,
         assistant_role=assistant_role
     )
@@ -1030,6 +1043,9 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     
     # 4. 添加通用要求
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n\n"
+    
+    # 4.5. 添加长度限制要求
+    base_prompt += "重要：每次发言请控制在500字左右，言简意赅，突出重点，避免冗长。不要生成过长的发言内容。\n\n"
     
     # 5. 添加角色约束
     base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
@@ -1151,6 +1167,9 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
         base_prompt += f"{case_description}\n\n"
     
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n"
+    
+    # 添加长度限制要求
+    base_prompt += "重要：每次发言请控制在500字左右，言简意赅，突出重点，避免冗长。不要生成过长的发言内容。\n"
     
     # 为各角色添加特殊约束
     if current_role == 'judge':
@@ -1689,8 +1708,9 @@ def summarize_case():
 @app.route('/api/verdict/generate', methods=['POST'])
 def generate_verdict():
     """
-    庭后宣判 - 生成判决书
-    根据案件信息和庭审对话历史生成判决书
+    庭后宣判 - 生成判决书和点评
+    1. 先让法官AI给出最终判决
+    2. 然后调用外部API对辩论过程进行点评
     """
     try:
         data = request.json
@@ -1710,7 +1730,9 @@ def generate_verdict():
                 if msg.get('text')
             ])
         
-        system_prompt = """你是一位专业的审判员，需要根据案件信息和庭审对话历史，生成一份完整的民事判决书。
+        # 第一步：让法官AI给出最终判决
+        logger.info("========== 第一步：生成法官最终判决 ==========")
+        judge_system_prompt = """你是一位专业的审判员，需要根据案件信息和庭审对话历史，生成一份完整的民事判决书。
 
 判决书应包含以下部分：
 1. 案件基本信息（当事人信息、案由、案件编号、审理法院、审理时间等）
@@ -1725,7 +1747,7 @@ def generate_verdict():
 - 基于提供的案件信息和庭审对话进行合理推断
 - 判决书应完整、逻辑清晰"""
         
-        user_prompt = f"""请根据以下案件信息和庭审对话，生成一份完整的民事判决书：
+        judge_user_prompt = f"""请根据以下案件信息和庭审对话，生成一份完整的民事判决书：
 
 案件描述：
 {case_description}
@@ -1735,11 +1757,45 @@ def generate_verdict():
 
 请生成一份完整的民事判决书，包含所有必要的部分。"""
         
-        # 调用外部AI API
-        verdict = call_external_ai(user_prompt, system_prompt, max_tokens=4000)
+        # 调用外部AI API生成法官判决
+        final_verdict = call_external_ai(judge_user_prompt, judge_system_prompt, max_tokens=4000)
+        logger.info(f"法官最终判决生成完成，长度: {len(final_verdict)} 字符")
+        
+        # 第二步：调用外部API对辩论过程进行点评
+        logger.info("========== 第二步：生成辩论过程点评 ==========")
+        review_system_prompt = """你是一位专业的法律教育专家，擅长分析法庭辩论过程。请对本次庭审辩论过程进行专业点评，分析精彩之处和可以改进的点。
+
+要求：
+- 客观、专业、有建设性
+- 从法律逻辑、辩论技巧、证据运用等角度进行分析
+- 指出辩论中的亮点和不足
+- 提供改进建议"""
+        
+        review_user_prompt = f"""请对以下庭审辩论过程进行专业点评：
+
+案件描述：
+{case_description}
+
+庭审对话历史：
+{dialogue_summary if dialogue_summary else "（无详细对话记录）"}
+
+法官最终判决：
+{final_verdict}
+
+请从以下角度进行点评：
+1. 辩论的精彩之处（如逻辑清晰、证据充分、法条运用准确等）
+2. 可以改进的点（如论证不够充分、证据链不完整、法条引用不当等）
+3. 整体评价和建议
+
+请提供详细、专业的点评。"""
+        
+        # 调用外部AI API生成点评
+        review = call_external_ai(review_user_prompt, review_system_prompt, max_tokens=2000)
+        logger.info(f"辩论过程点评生成完成，长度: {len(review)} 字符")
         
         return jsonify({
-            'verdict': verdict,
+            'verdict': final_verdict,
+            'review': review,
             'success': True
         })
     

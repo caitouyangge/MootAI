@@ -92,10 +92,10 @@ public class DebateController {
     }
     
     /**
-     * 生成判决书
+     * 生成判决书和点评
      */
     @PostMapping("/verdict")
-    public ApiResponse<String> generateVerdict(@RequestBody Map<String, Object> request) {
+    public ApiResponse<Map<String, String>> generateVerdict(@RequestBody Map<String, Object> request) {
         try {
             String caseDescription = (String) request.get("caseDescription");
             @SuppressWarnings("unchecked")
@@ -106,8 +106,8 @@ public class DebateController {
                 return ApiResponse.error("案件描述不能为空");
             }
             
-            String verdict = aiService.generateVerdict(caseDescription, messages, identity);
-            return ApiResponse.success("判决书生成成功", verdict);
+            Map<String, String> result = aiService.generateVerdict(caseDescription, messages, identity);
+            return ApiResponse.success("判决书和点评生成成功", result);
         } catch (Exception e) {
             return ApiResponse.error("判决书生成失败: " + e.getMessage());
         }
