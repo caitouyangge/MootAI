@@ -120,6 +120,32 @@ def check_duplicate_speech(new_text: str, messages: list, current_role: str, sim
     # 计算相似度（使用简单的文本相似度算法）
     new_text_clean = new_text.strip()
     
+    # 对于审判员的短指令（如"请XX发言"），使用更严格的检测
+    is_judge_short_command = target_role == 'judge' and len(new_text_clean) < 50
+    if is_judge_short_command:
+        # 提取关键指令词（"请XX发言"、"请XX发表XX意见"等）
+        import re
+        # 匹配"请XX发言"或"请XX发表XX意见"等模式
+        command_pattern = r'请(公诉人|辩护人)(发言|发表.*?意见)'
+        new_command_match = re.search(command_pattern, new_text_clean)
+        
+        if new_command_match:
+            # 提取指令的核心部分（"请公诉人发言"或"请辩护人发言"）
+            new_command_core = new_command_match.group(0)
+            
+            for old_text in recent_speeches:
+                old_text_clean = old_text.strip()
+                old_command_match = re.search(command_pattern, old_text_clean)
+                
+                if old_command_match:
+                    old_command_core = old_command_match.group(0)
+                    # 如果指令核心部分相同，判定为重复
+                    if new_command_core == old_command_core:
+                        logger.warning(f"[重复检测] 检测到审判员重复的指令（角色: {current_role}）")
+                        logger.warning(f"[重复检测] 新指令: {new_command_core}")
+                        logger.warning(f"[重复检测] 历史指令: {old_command_core}")
+                        return True
+    
     for old_text in recent_speeches:
         old_text_clean = old_text.strip()
         
@@ -131,7 +157,10 @@ def check_duplicate_speech(new_text: str, messages: list, current_role: str, sim
         # 计算相似度（使用最长公共子序列或简单的字符重叠率）
         similarity = calculate_text_similarity(new_text_clean, old_text_clean)
         
-        if similarity >= similarity_threshold:
+        # 对于审判员的短指令，使用更低的相似度阈值
+        threshold = 0.75 if is_judge_short_command else similarity_threshold
+        
+        if similarity >= threshold:
             logger.warning(f"[重复检测] 检测到高度相似的发言（角色: {current_role}, 相似度: {similarity:.2f}）")
             logger.warning(f"[重复检测] 新发言预览: {new_text_clean[:100]}...")
             logger.warning(f"[重复检测] 历史发言预览: {old_text_clean[:100]}...")
@@ -570,6 +599,16 @@ def generate():
         if model is None:
             return jsonify({'error': '模型未加载'}), 500
         
+        # 输出完整的提示词日志
+        logger.info("=" * 80)
+        logger.info("【AI调用 - generate】完整提示词")
+        logger.info("=" * 80)
+        logger.info(f"系统提示词: {system_prompt if system_prompt else '(无)'}")
+        logger.info(f"用户提示词: {prompt}")
+        logger.info(f"助手角色: {assistant_role if assistant_role else '(无)'}")
+        logger.info(f"参数: max_new_tokens={max_tokens}, temperature={temperature}, top_p={top_p}")
+        logger.info("=" * 80)
+        
         response = model.generate(
             prompt=prompt,
             max_new_tokens=max_tokens,
@@ -613,6 +652,18 @@ def chat():
         model = get_model()
         if model is None:
             return jsonify({'error': '模型未加载'}), 500
+        
+        # 输出完整的提示词日志
+        logger.info("=" * 80)
+        logger.info("【AI调用 - chat】完整提示词")
+        logger.info("=" * 80)
+        logger.info(f"系统提示词: {system_prompt if system_prompt else '(无)'}")
+        logger.info(f"消息历史数量: {len(messages)}")
+        for i, msg in enumerate(messages):
+            logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+        logger.info(f"助手角色: {assistant_role if assistant_role else '(无)'}")
+        logger.info(f"参数: max_new_tokens={max_tokens}, temperature={temperature}, top_p={top_p}")
+        logger.info("=" * 80)
         
         response = model.chat(
             messages=messages,
@@ -769,6 +820,18 @@ def debate_generate_training_format(data):
     total_input_chars = sum(len(str(msg.get('content', ''))) for msg in formatted_messages) + len(system_prompt)
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
+    
+    # 输出完整的提示词日志
+    logger.info("=" * 80)
+    logger.info("【AI调用 - debate_generate_training_format】完整提示词")
+    logger.info("=" * 80)
+    logger.info(f"系统提示词: {system_prompt}")
+    logger.info(f"消息历史数量: {len(formatted_messages)}")
+    for i, msg in enumerate(formatted_messages):
+        logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+    logger.info(f"助手角色: {agent_role}")
+    logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
+    logger.info("=" * 80)
     
     # 使用适中的temperature以获得更好的生成质量（0.3-0.5之间平衡速度和创造性）
     # 如果temperature=0.0可能导致生成过于保守和简短
@@ -952,6 +1015,18 @@ def debate_generate_legacy_format(data):
     total_input_chars = sum(len(str(msg.get('content', ''))) for msg in formatted_messages) + len(system_prompt)
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
+    
+    # 输出完整的提示词日志
+    logger.info("=" * 80)
+    logger.info("【AI调用 - debate_generate_legacy_format】完整提示词")
+    logger.info("=" * 80)
+    logger.info(f"系统提示词: {system_prompt}")
+    logger.info(f"消息历史数量: {len(formatted_messages)}")
+    for i, msg in enumerate(formatted_messages):
+        logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+    logger.info(f"助手角色: {assistant_role}")
+    logger.info(f"参数: max_new_tokens=350, temperature=0.3, top_p=0.9")
+    logger.info("=" * 80)
     
     # 限制生成长度：500字左右 ≈ 300-350 tokens（中文字符token化更高效）
     response = model.chat(
@@ -1330,18 +1405,20 @@ def call_external_ai(prompt, system_prompt=None, max_tokens=2000, max_retries=3)
     system_prompt_length = len(system_prompt) if system_prompt else 0
     total_messages_length = sum(len(str(msg.get("content", ""))) for msg in messages)
     
-    logger.info("=" * 60)
-    logger.info("调用外部AI API - 请求详情")
-    logger.info("=" * 60)
+    logger.info("=" * 80)
+    logger.info("【AI调用 - call_external_ai】完整提示词")
+    logger.info("=" * 80)
     logger.info(f"URL: {url}")
     logger.info(f"模型: {EXTERNAL_AI_MODEL}")
-    logger.info(f"用户提示词长度: {prompt_length} 字符")
-    logger.info(f"系统提示词长度: {system_prompt_length} 字符")
+    logger.info(f"系统提示词: {system_prompt if system_prompt else '(无)'}")
+    logger.info(f"用户提示词: {prompt}")
     logger.info(f"消息总数: {len(messages)}")
-    logger.info(f"总消息内容长度: {total_messages_length} 字符")
-    logger.info(f"最大token数: {max_tokens}")
+    for i, msg in enumerate(messages):
+        logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+    logger.info(f"参数: max_tokens={max_tokens}, temperature=0.7")
     logger.info(f"最大重试次数: {max_retries}")
     logger.info(f"API密钥前缀: {EXTERNAL_AI_API_KEY[:10]}...{EXTERNAL_AI_API_KEY[-4:] if len(EXTERNAL_AI_API_KEY) > 14 else ''}")
+    logger.info("=" * 80)
     
     # 重试机制
     import time
