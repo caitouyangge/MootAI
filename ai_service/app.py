@@ -77,6 +77,60 @@ def clean_special_tokens(text: str) -> str:
     return cleaned.strip()
 
 
+def filter_judge_style_speech(text: str, agent_role: str) -> str:
+    """
+    过滤掉审判员式的发言模式（如"现在进入辩论环节"、"首先由XX发表XX意见"等）
+    
+    Args:
+        text: 原始文本
+        agent_role: 当前角色（'公诉人'、'辩护人'等）
+    
+    Returns:
+        过滤后的文本
+    """
+    if not text or agent_role == '审判员':
+        return text
+    
+    # 定义审判员式的发言模式（阶段转换语）
+    judge_style_patterns = [
+        r'现在进入辩论环节[。，]?',
+        r'现在进行法庭辩论[。，]?',
+        r'首先由.*?发表.*?意见[。，]?',
+        r'现在宣布.*?[。，]?',
+        r'现在开始.*?[。，]?',
+        r'进入.*?环节[。，]?',
+        r'现在.*?环节[。，]?',
+    ]
+    
+    import re
+    filtered_text = text
+    
+    # 检查是否包含审判员式的发言模式
+    has_judge_style = False
+    for pattern in judge_style_patterns:
+        if re.search(pattern, filtered_text):
+            has_judge_style = True
+            logger.warning(f"[审判员口吻检测] 检测到审判员式发言模式（角色: {agent_role}）")
+            logger.warning(f"[审判员口吻检测] 匹配模式: {pattern}")
+            logger.warning(f"[审判员口吻检测] 原始内容: {filtered_text[:200]}")
+            break
+    
+    if has_judge_style:
+        # 尝试移除审判员式的开头部分
+        for pattern in judge_style_patterns:
+            # 移除匹配的模式及其后面的标点符号和换行
+            filtered_text = re.sub(pattern + r'[\s\n]*', '', filtered_text, flags=re.IGNORECASE)
+        
+        # 如果过滤后文本为空或太短，保留原始文本但添加警告
+        if len(filtered_text.strip()) < 10:
+            logger.warning(f"[审判员口吻检测] 过滤后文本过短，保留原始文本")
+            filtered_text = text
+        else:
+            logger.info(f"[审判员口吻检测] 已过滤审判员式发言，过滤后内容: {filtered_text[:200]}")
+    
+    return filtered_text.strip()
+
+
 def check_duplicate_speech(new_text: str, messages: list, current_role: str, similarity_threshold: float = 0.85) -> bool:
     """
     检查新生成的发言是否与历史消息重复
@@ -695,13 +749,14 @@ def debate_generate():
     """
     法庭辩论生成
     支持两种输入格式：
-    1. 训练数据格式（推荐）：
+    1. 训练数据格式（推荐，完全匹配训练数据格式）：
        {
-         "agent_role": "审判员",  // 当前要回复的角色
-         "background": "...",     // 案件背景
-         "context": "...",        // 对话历史（用\n分隔）
-         "role_to_reply": "辩护人", // 要回复的角色
-         "instruction": "..."     // 角色指令
+         "agent_role": "公诉人",      // 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"）
+         "background": "...",          // 案件背景（前面保存的案件描述）
+         "context": "...",             // 对话历史（用\n分隔，格式：角色名：内容）
+         "role_to_reply": "审判员",    // 要回复的角色（可选，默认与agent_role相同）
+         "new_content": "公诉人，对于辩护人提出的...你方如何评价？",  // 新的内容（如审判员的提问）
+         "instruction": "..."          // 角色指令（包含诉讼策略、审判员类型等）
        }
     2. 旧格式（向后兼容）：
        {
@@ -735,30 +790,32 @@ def debate_generate():
 
 def debate_generate_training_format(data):
     """
-    使用训练数据格式生成回复
+    使用训练数据格式生成回复（完全按照训练数据格式）
     
-    输入字段说明：
+    输入字段说明（完全匹配训练数据格式）：
     - agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
     - background: 案件背景（前面保存的案件描述）
-    - context: 上下文（对话历史，用\n分隔）
-    - instruction: 角色指令（包含诉讼策略、审判员类型等）
+    - context: 上下文（对话历史，用\n分隔，格式：角色名：内容）
     - role_to_reply: 要回复的角色（可选，默认与agent_role相同）
+    - new_content: 新的内容（如审判员的提问，格式：角色名：内容）
+    - instruction: 角色指令（包含诉讼策略、审判员类型等）
+    - reference_answer: 参考答案（训练时用，推理时不需要）
     """
     agent_role = data.get('agent_role')  # 当前AI扮演的角色
-    background = data.get('background', '')  # 案件背景（从前面保存的案件描述获取）
+    background = data.get('background', '')  # 案件背景
     context = data.get('context', '')  # 上下文（对话历史，用\n分隔）
-    role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色（可选）
-    instruction = data.get('instruction', '')  # 角色指令（包含诉讼策略、审判员类型等）
+    role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色
+    new_content = data.get('new_content', '')  # 新的内容（如审判员的提问）
+    instruction = data.get('instruction', '')  # 角色指令
     
     if not agent_role:
         return jsonify({'error': 'agent_role参数不能为空'}), 400
     
-    logger.info(f"[角色调试] ========== 训练格式生成请求 ==========")
-    logger.info(f"[角色调试] agent_role: {agent_role}")
-    logger.info(f"[角色调试] role_to_reply: {role_to_reply}")
-    logger.info(f"[角色调试] background长度: {len(background)}, context长度: {len(context)}")
-    if context:
-        logger.info(f"[角色调试] context预览(前200字符): {context[:200]}")
+    logger.info(f"[训练格式] ========== 训练格式生成请求 ==========")
+    logger.info(f"[训练格式] agent_role: {agent_role}")
+    logger.info(f"[训练格式] role_to_reply: {role_to_reply}")
+    logger.info(f"[训练格式] new_content: {new_content[:200] if new_content else '(无)'}")
+    logger.info(f"[训练格式] background长度: {len(background)}, context长度: {len(context)}")
     
     model = get_model()
     if model is None:
@@ -770,33 +827,55 @@ def debate_generate_training_format(data):
         background=background,
         instruction=instruction
     )
-    logger.info(f"[角色调试] 系统提示词长度: {len(system_prompt)}")
-    logger.info(f"[角色调试] 系统提示词开头(前200字符): {system_prompt[:200]}")
+    logger.info(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
     
     # 将context转换为消息格式（限制消息数量为最近6条）
-    formatted_messages = format_context_to_messages(context, max_messages=6)  # 只保留最近6条消息
-    logger.info(f"[角色调试] 格式化后的消息数量: {len(formatted_messages)}")
-    if formatted_messages:
-        logger.info(f"[角色调试] 格式化后的消息列表:")
-        for i, msg in enumerate(formatted_messages):
-            logger.info(f"[角色调试]   消息[{i}]: role={msg.get('role')}, content预览={msg.get('content', '')[:100]}")
+    formatted_messages = format_context_to_messages(context, max_messages=6, agent_role=agent_role)
+    logger.info(f"[训练格式] 格式化后的消息数量: {len(formatted_messages)}")
     
-    # 在消息列表末尾添加明确的提示，说明当前要生成的是agent_role的回复
-    # 这可以防止模型误以为要生成其他角色的发言
-    # 重要：不要使用"请{agent_role}继续发言"这种审判员式的语气，会误导模型
-    # 优化：如果最后一条消息已经是user，则将提示合并到上一条消息中，避免连续两条user消息
-    if formatted_messages and formatted_messages[-1].get('role') == 'user':
-        # 将角色提示合并到上一条user消息中
-        last_content = formatted_messages[-1].get('content', '')
-        formatted_messages[-1]['content'] = f"{last_content}\n\n现在请以{agent_role}的身份直接陈述观点，要求：简洁明了，直接说重点，在完整表达意思的前提下尽量控制在300字左右，避免废话和冗长描述。禁止模仿其他角色的发言风格，必须直接以{agent_role}的身份发言。"
-        logger.info(f"[角色调试] 已将角色提示合并到上一条user消息")
-    else:
-        # 如果最后一条不是user，添加新的user消息
+    # 如果有new_content，将其添加到消息历史中（这是训练数据格式的关键）
+    # new_content格式可能是：
+    # 1. "公诉人，对于辩护人提出的...你方如何评价？"（没有角色名，需要添加role_to_reply）
+    # 2. "审判员：公诉人，对于辩护人提出的...你方如何评价？"（已有角色名和冒号）
+    if new_content:
+        new_content_stripped = new_content.strip()
+        
+        # 检查new_content是否已经包含角色名（以role_to_reply开头）
+        has_role_prefix = new_content_stripped.startswith(role_to_reply)
+        
+        # 检查是否包含冒号（中文或英文）
+        has_colon = '：' in new_content_stripped or ':' in new_content_stripped
+        
+        # 如果已经有角色名和冒号，直接使用
+        if has_role_prefix and has_colon:
+            new_content_with_role = new_content_stripped
+        # 如果只有冒号但没有角色名，或者没有冒号，添加角色名
+        elif has_colon and not has_role_prefix:
+            # 有冒号但没有角色名，说明格式可能是"：内容"，需要添加角色名
+            colon_pos = new_content_stripped.find('：') if '：' in new_content_stripped else new_content_stripped.find(':')
+            content_part = new_content_stripped[colon_pos+1:].strip()
+            new_content_with_role = f"{role_to_reply}：{content_part}"
+        else:
+            # 没有冒号，直接添加角色名和中文冒号
+            new_content_with_role = f"{role_to_reply}：{new_content_stripped}"
+        
+        # 将new_content作为最后一条消息添加到历史中
+        # 根据前一条消息的角色决定当前消息的角色（交替user/assistant）
+        if formatted_messages:
+            prev_role = formatted_messages[-1].get('role', 'user')
+            new_msg_role = 'assistant' if prev_role == 'user' else 'user'
+        else:
+            new_msg_role = 'user'
+        
         formatted_messages.append({
-            'role': 'user',
-            'content': f'现在请以{agent_role}的身份直接陈述观点，要求：简洁明了，直接说重点，在完整表达意思的前提下尽量控制在300字左右，避免废话和冗长描述。禁止模仿其他角色的发言风格，必须直接以{agent_role}的身份发言。'
+            'role': new_msg_role,
+            'content': new_content_with_role
         })
-        logger.info(f"[角色调试] 已添加角色提示消息")
+        logger.info(f"[训练格式] 已添加new_content到消息历史: {new_content_with_role[:100]}")
+    
+    # 注意：不再将提示词作为用户消息添加到消息历史中
+    # 所有角色约束和提示已经包含在系统提示词（system_prompt）中
+    # 这样可以避免提示词被当作对话上下文的一部分
     
     # 检查模型是否在GPU上（性能关键）
     try:
@@ -856,6 +935,11 @@ def debate_generate_training_format(data):
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
     logger.info(f"[训练格式] 清理后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+    
+    # 过滤审判员式的发言模式（对于公诉人和辩护人）
+    cleaned_response = filter_judge_style_speech(cleaned_response, agent_role)
+    if cleaned_response != response:
+        logger.info(f"[训练格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复（需要将context转换为messages格式进行检查）
     # 从context中提取历史消息
@@ -1001,11 +1085,21 @@ def debate_generate_legacy_format(data):
             'defendant': '辩护人'
         }
         role_name = role_name_map.get(current_role, current_role)
+        
+        # 对于公诉人和辩护人，特别强调禁止以审判员口吻发言
+        judge_style_ban = ""
+        if current_role in ['plaintiff', 'defendant']:
+            judge_style_ban = "【极其重要】绝对禁止以审判员口吻发言，禁止生成\"现在进入辩论环节\"、\"首先由XX发表XX意见\"、\"现在进行法庭辩论\"等审判员式的阶段转换语。"
+        
+        prompt_text = f'请以{role_name}的身份继续发言，直接陈述观点，不要以其他角色（如审判员）的口吻提问。发言控制在500字左右。'
+        if judge_style_ban:
+            prompt_text = f"{judge_style_ban}\n\n{prompt_text}"
+        
         formatted_messages.append({
             'role': 'user',
-            'content': f'请以{role_name}的身份继续发言，直接陈述观点，不要以其他角色（如审判员）的口吻提问。发言控制在500字左右。'
+            'content': prompt_text
         })
-        logger.info(f"[角色调试] 已添加角色提示消息: 请以{role_name}的身份继续发言")
+        logger.info(f"[角色调试] 已添加角色提示消息: 请以{role_name}的身份继续发言（包含审判员口吻禁止提示）")
     
     # 生成回复（优化：进一步降低max_new_tokens并优化参数以加快生成速度）
     import time
@@ -1046,6 +1140,17 @@ def debate_generate_legacy_format(data):
     
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
+    
+    # 过滤审判员式的发言模式（对于公诉人和辩护人）
+    role_name_map = {
+        'judge': '审判员',
+        'plaintiff': '公诉人',
+        'defendant': '辩护人'
+    }
+    agent_role_name = role_name_map.get(current_role, current_role)
+    cleaned_response = filter_judge_style_speech(cleaned_response, agent_role_name)
+    if cleaned_response != response:
+        logger.info(f"[旧格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复
     if check_duplicate_speech(cleaned_response, messages, current_role):
@@ -1095,7 +1200,7 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     if agent_role == '辩护人':
         base_prompt += "重要：对话历史中可能包含审判员、公诉人的发言，但你必须以辩护人身份直接陈述观点，禁止模仿审判员的提问方式（如\"辩护人，对于...你方如何回应?\"、\"请辩护人...\"等），禁止以第三人称称呼自己，禁止生成任何审判员式的发言。你必须直接以第一人称陈述辩护观点，例如\"我方认为...\"、\"根据...\"等。\n\n"
     elif agent_role == '公诉人':
-        base_prompt += "重要：对话历史中可能包含审判员、辩护人的发言，但你必须以公诉人身份直接陈述观点，禁止模仿审判员的提问方式（如\"请公诉人...\"等），禁止以第三人称称呼自己，禁止生成任何审判员式的发言。你必须直接以第一人称陈述公诉观点。\n\n"
+        base_prompt += "【极其重要】对话历史中可能包含审判员的发言（如\"请公诉人发表公诉意见\"等），但你必须以公诉人身份直接陈述观点，绝对禁止模仿审判员的发言风格。禁止生成任何审判员式的发言，包括但不限于：\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"等阶段转换语。禁止以第三人称称呼自己，禁止以审判员口吻发言。你必须直接以第一人称陈述公诉观点，例如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等。\n\n"
     elif agent_role == '审判员':
         base_prompt += "重要：对话历史中可能包含公诉人、辩护人的发言，但你必须以审判员身份发言，禁止模仿其他角色的发言风格。\n\n"
     
@@ -1130,12 +1235,12 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     elif agent_role == '辩护人':
         base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif agent_role == '公诉人':
-        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
+        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止以审判员口吻发言（如\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"、\"请公诉人...\"等），必须直接以第一人称陈述公诉观点（如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     
     return base_prompt
 
 
-def format_context_to_messages(context, max_messages=6):
+def format_context_to_messages(context, max_messages=6, agent_role=None):
     """
     将训练数据格式的context（用\n分隔的对话）转换为消息格式
     优化：限制消息数量以减少输入长度，加快生成速度
@@ -1148,13 +1253,14 @@ def format_context_to_messages(context, max_messages=6):
     输出格式：
     [
         {"role": "user", "content": "审判员：现在开庭..."},
-        {"role": "assistant", "content": "公诉人：根据起诉书..."},
-        {"role": "user", "content": "辩护人：我方认为..."}
+        {"role": "user", "content": "公诉人：根据起诉书..."},
+        {"role": "assistant", "content": "辩护人：我方认为..."}  # 如果agent_role是辩护人
     ]
     
     Args:
         context: 对话历史文本
         max_messages: 最大消息数量（默认6，只保留最近的对话）
+        agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"），只有这个角色的发言标记为assistant，其他都是user
     """
     if not context:
         return []
@@ -1187,14 +1293,12 @@ def format_context_to_messages(context, max_messages=6):
             role_name = parts[0].strip()
             content = parts[1].strip() if len(parts) > 1 else ''
         
-        # 确定消息角色（交替使用user和assistant）
-        # 第一条消息通常是user，后续交替
-        if len(messages) == 0:
-            msg_role = 'user'
+        # 根据实际角色名称确定消息角色
+        # 只有当前AI自己的角色标记为assistant，其他所有角色都标记为user
+        if agent_role and role_name == agent_role:
+            msg_role = 'assistant'
         else:
-            # 根据前一条消息的角色决定
-            prev_role = messages[-1].get('role', 'user')
-            msg_role = 'assistant' if prev_role == 'user' else 'user'
+            msg_role = 'user'
         
         # 构建消息内容（统一使用中文冒号）
         if role_name:

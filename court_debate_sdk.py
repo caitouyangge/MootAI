@@ -207,6 +207,31 @@ class CourtDebateModel:
         
         messages = _build_messages(system_prompt, [], prompt)
         
+        # 打印最原始的完整提示词（未加工的）
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            # 使用 tokenizer 生成完整的提示词文本（不进行 tokenize）
+            raw_prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,  # 不进行 tokenize，只获取文本
+                add_generation_prompt=True,
+            )
+            logger.info("=" * 80)
+            logger.info("【最原始完整提示词 - 未加工】")
+            logger.info("=" * 80)
+            logger.info(raw_prompt)
+            logger.info("=" * 80)
+        except Exception as e:
+            logger.warning(f"无法生成原始提示词文本: {e}")
+            # 如果无法生成，至少打印消息列表
+            logger.info("=" * 80)
+            logger.info("【完整消息列表 - 未加工】")
+            logger.info("=" * 80)
+            for i, msg in enumerate(messages):
+                logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+            logger.info("=" * 80)
+        
         response = generate_with_retries(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -253,6 +278,31 @@ class CourtDebateModel:
         if system_prompt:
             full_messages.append({"role": "system", "content": system_prompt})
         full_messages.extend(messages)
+        
+        # 打印最原始的完整提示词（未加工的）
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            # 使用 tokenizer 生成完整的提示词文本（不进行 tokenize）
+            raw_prompt = self.tokenizer.apply_chat_template(
+                full_messages,
+                tokenize=False,  # 不进行 tokenize，只获取文本
+                add_generation_prompt=True,
+            )
+            logger.info("=" * 80)
+            logger.info("【最原始完整提示词 - 未加工】")
+            logger.info("=" * 80)
+            logger.info(raw_prompt)
+            logger.info("=" * 80)
+        except Exception as e:
+            logger.warning(f"无法生成原始提示词文本: {e}")
+            # 如果无法生成，至少打印消息列表
+            logger.info("=" * 80)
+            logger.info("【完整消息列表 - 未加工】")
+            logger.info("=" * 80)
+            for i, msg in enumerate(full_messages):
+                logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
+            logger.info("=" * 80)
         
         response = generate_with_retries(
             model=self.model,

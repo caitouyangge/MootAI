@@ -642,44 +642,9 @@ const generateUserAiResponse = async () => {
 const buildBackground = () => {
   let background = ''
   
-  // 1. 身份信息
-  background += `【身份信息】\n`
-  background += `用户身份：${userIdentity.value === 'plaintiff' ? '公诉人' : '辩护人'}\n\n`
-  
-  // 2. 文件列表
-  if (fileList.value && fileList.value.length > 0) {
-    background += `【上传文件】\n`
-    fileList.value.forEach((file, index) => {
-      background += `${index + 1}. ${file.name}\n`
-      // 如果有文件内容，也包含进去
-      if (file.content) {
-        background += `   内容预览：${file.content.substring(0, 200)}${file.content.length > 200 ? '...' : ''}\n`
-      }
-    })
-    background += `\n`
-  }
-  
-  // 3. 案件描述
+  // 案件描述
   if (caseDescription.value) {
-    background += `【案件描述】\n${caseDescription.value}\n\n`
-  }
-  
-  // 4. 诉讼策略
-  background += `【诉讼策略】\n`
-  if (userIdentity.value === 'plaintiff') {
-    // 如果用户使用AI代理，使用用户选择的策略；否则使用默认策略
-    const userStrategyDesc = useAiProxy.value && userStrategy.value 
-      ? strategyDefinitions[userStrategy.value] 
-      : plaintiffStrategy.value
-    background += `公诉人策略：${userStrategyDesc}\n`
-    background += `辩护人策略：${defendantStrategy.value}\n`
-  } else {
-    // 如果用户使用AI代理，使用用户选择的策略；否则使用默认策略
-    const userStrategyDesc = useAiProxy.value && userStrategy.value 
-      ? strategyDefinitions[userStrategy.value] 
-      : defendantStrategy.value
-    background += `公诉人策略：${plaintiffStrategy.value}\n`
-    background += `辩护人策略：${userStrategyDesc}\n`
+    background += `${caseDescription.value}\n\n`
   }
   
   return background
@@ -690,6 +655,12 @@ const checkJudgeShouldSpeak = async () => {
   console.log('[辩论流程] 检查审判员是否应该发言 - 开始')
   console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
   console.log('[辩论流程] 消息数量:', messages.value.length)
+  
+  // 如果辩论已结束，不再检查
+  if (isDebateEnded.value || debateCompleted.value) {
+    console.log('[辩论流程] 辩论已结束，不再检查审判员发言')
+    return
+  }
   
   if (isGenerating.value) {
     console.log('[辩论流程] 正在生成中，跳过检查')
@@ -943,6 +914,12 @@ const extractNextSpeakerFromJudgeSpeech = async (judgeSpeech) => {
   console.log('[辩论流程] 审判员发言内容预览:', judgeSpeech.substring(0, 200))
   console.log('[辩论流程] 用户身份:', userIdentity.value)
   
+  // 如果辩论已结束，不再继续
+  if (isDebateEnded.value || debateCompleted.value) {
+    console.log('[辩论流程] 辩论已结束，不再继续发言流程')
+    return
+  }
+  
   // 确保状态已重置
   isGenerating.value = false
   currentSpeakingRole.value = ''
@@ -1030,6 +1007,12 @@ const decideNextSpeaker = async () => {
 const continueAlternatingDebate = async () => {
   console.log('[辩论流程] 继续公诉人和辩护人轮流发言 - 开始')
   
+  // 如果辩论已结束，不再继续
+  if (isDebateEnded.value || debateCompleted.value) {
+    console.log('[辩论流程] 辩论已结束，不再继续发言流程')
+    return
+  }
+  
   // 获取最后一条非审判员消息的角色
   const lastNonJudgeMessage = [...messages.value].reverse().find(m => m.role !== 'judge')
   
@@ -1100,6 +1083,14 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
   console.log('[辩论流程] 生成AI回复 - 开始')
   console.log('[辩论流程] 参数 - role:', role, ', isFirstJudgeSpeech:', isFirstJudgeSpeech, ', shouldCheckJudgeAfter:', shouldCheckJudgeAfter)
   console.log('[辩论流程] 当前状态 - isGenerating:', isGenerating.value, ', currentSpeakingRole:', currentSpeakingRole.value)
+  
+  // 如果辩论已结束，不再生成AI回复
+  if (isDebateEnded.value || debateCompleted.value) {
+    console.log('[辩论流程] 辩论已结束，不再生成AI回复')
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+    return
+  }
   
   if (isGenerating.value) {
     console.log('[辩论流程] 正在生成中，跳过')
@@ -1173,7 +1164,11 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
       }
       
       // 检查是否应该结束庭审（法官决定结束）
-      if (role === 'judge' && (aiText.includes('休庭') || aiText.includes('评议') || aiText.includes('结束') || aiText.includes('合议庭'))) {
+      // 检测更多表示结束的关键词：休庭、评议、结束、合议庭、尾声、作出裁判、依法作出裁判等
+      const endKeywords = ['休庭', '评议', '结束', '合议庭', '尾声', '作出裁判', '依法作出裁判', '依法对本案作出裁判', '作出公正判决', '作出判决', '庭审结束', '辩论结束', '法庭辩论结束']
+      const shouldEndDebate = role === 'judge' && endKeywords.some(keyword => aiText.includes(keyword))
+      
+      if (shouldEndDebate) {
         console.log('[辩论流程] 检测到法官决定结束庭审，标记辩论结束')
         isDebateEnded.value = true
         debateCompleted.value = true
