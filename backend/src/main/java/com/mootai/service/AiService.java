@@ -215,17 +215,28 @@ public class AiService {
                         instruction.append("专业型审判员：讲话简洁，业务熟练，判决果断。");
                         break;
                     case "strong":
-                        instruction.append("强势型审判员：专业能力出众，细节能力强。");
+                        instruction.append("强势型审判员：专业能力极度自信，不接受律师的反驳。");
+                        break;
+                    case "irritable":
+                        instruction.append("暴躁型审判员：急躁易怒，控制力强，常拍桌训人。");
+                        break;
+                    case "lazy":
+                        instruction.append("偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节。");
+                        break;
+                    case "wavering":
+                        instruction.append("摇摆型审判员：优柔寡断，复杂案件时常左右摇摆。");
+                        break;
+                    case "partial":
+                        instruction.append("偏袒型审判员：常替弱者说话，判决会考虑弱者利益。");
                         break;
                     case "partial-plaintiff":
-                        instruction.append("偏袒型审判员：习惯对公诉人宽容。");
+                        instruction.append("偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方。");
                         break;
                     case "partial-defendant":
-                        instruction.append("偏袒型审判员：习惯对辩护人宽容。");
+                        instruction.append("偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方。");
                         break;
-                    case "neutral":
                     default:
-                        instruction.append("中立型审判员：保持中立，注重程序公正。");
+                        instruction.append("专业型审判员：讲话简洁，业务熟练，判决果断。");
                         break;
                 }
                 instruction.append("\n");

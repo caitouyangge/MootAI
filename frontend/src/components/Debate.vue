@@ -60,7 +60,7 @@
 
     <!-- 庭审对话区域 -->
     <div class="debate-chat-section" :class="{ 'debate-ended': isDebateEnded }">
-      <div class="section-header">
+      <div v-if="!isModelLoading" class="section-header">
         <h3 class="section-title">庭审现场</h3>
         <div v-if="debateStarted && messages.length > 0" class="header-actions">
           <el-button
@@ -83,13 +83,13 @@
           </el-button>
         </div>
       </div>
-      <div v-if="isDebateEnded" class="debate-ended-notice">
+      <div v-if="!isModelLoading && isDebateEnded" class="debate-ended-notice">
         <div class="notice-icon">🔒</div>
         <div class="notice-text">法官已决定结束辩论，庭审现场已锁定，除重置按钮外无法交互</div>
       </div>
       <div class="chat-container" ref="chatContainer">
         <!-- 模型初始化提示 -->
-        <div v-if="modelInitializing || (modelInitProgress && !modelLoaded)" class="model-init-progress">
+        <div v-if="isModelLoading" class="model-init-progress">
           <div class="progress-content">
             <el-icon class="is-loading progress-icon"><Loading /></el-icon>
             <div class="progress-text">
@@ -103,14 +103,15 @@
             <span>初始化失败: {{ modelInitError }}</span>
           </div>
         </div>
-        <div v-else-if="messages.length === 0" class="empty-tip">
-          <p>请点击"开始庭审"按钮开始模拟法庭辩论</p>
-        </div>
-        <div
-          v-for="(message, index) in messages"
-          :key="index"
-          :class="['message-item', `message-${message.role}`]"
-        >
+        <template v-else>
+          <div v-if="messages.length === 0" class="empty-tip">
+            <p>请点击"开始庭审"按钮开始模拟法庭辩论</p>
+          </div>
+          <div
+            v-for="(message, index) in messages"
+            :key="index"
+            :class="['message-item', `message-${message.role}`]"
+          >
           <!-- 公诉人：左边布局 -->
           <template v-if="message.role === 'plaintiff'">
             <div class="message-avatar">
@@ -211,11 +212,12 @@
               </div>
             </div>
           </template>
-        </div>
+          </div>
+        </template>
       </div>
       
       <!-- 用户输入区域 -->
-      <div v-if="debateStarted && !debateCompleted && !isDebateEnded" class="input-section">
+      <div v-if="!isModelLoading && debateStarted && !debateCompleted && !isDebateEnded" class="input-section">
         <!-- 发言状态提示 -->
         <div class="speaking-status">
           <div v-if="isGenerating" class="status-item status-generating">
@@ -357,26 +359,41 @@ const judgeTypes = ref([
   {
     value: 'strong',
     label: '强势型',
-    description: '专业能力出众，细节能力强'
+    description: '专业能力极度自信，不接受律师的反驳'
+  },
+  {
+    value: 'irritable',
+    label: '暴躁型',
+    description: '急躁易怒，控制力强，常拍桌训人'
+  },
+  {
+    value: 'lazy',
+    label: '偷懒型',
+    description: '粗略听案，嫌当事人啰嗦，不重视细节'
+  },
+  {
+    value: 'wavering',
+    label: '摇摆型',
+    description: '优柔寡断，复杂案件时常左右摇摆'
+  },
+  {
+    value: 'partial',
+    label: '偏袒型',
+    description: '常替弱者说话，判决会考虑弱者利益'
   },
   {
     value: 'partial-plaintiff',
     label: '偏袒型（公诉人）',
-    description: '习惯对公诉人宽容'
+    description: '习惯对公诉人宽容，倾向于支持公诉方'
   },
   {
     value: 'partial-defendant',
     label: '偏袒型（辩护人）',
-    description: '习惯对辩护人宽容'
-  },
-  {
-    value: 'neutral',
-    label: '中立型',
-    description: '保持中立，注重程序公正'
+    description: '习惯对辩护人宽容，倾向于支持辩护方'
   }
 ])
 
-const selectedJudgeType = ref(caseStore.selectedJudgeType || 'neutral')
+const selectedJudgeType = ref(caseStore.selectedJudgeType || 'professional')
 const debateStarted = ref(false)
 const isGenerating = ref(false)
 const userInput = ref('')
@@ -1378,6 +1395,11 @@ const isUserTurn = computed(() => {
   return false
 })
 
+// 判断模型是否正在加载
+const isModelLoading = computed(() => {
+  return modelInitializing.value || (modelInitProgress.value && !modelLoaded.value)
+})
+
 // 获取下一个发言人的名称
 const nextSpeakerName = computed(() => {
   if (!debateStarted.value || messages.value.length === 0) {
@@ -1718,6 +1740,28 @@ const loadDebateMessages = async () => {
 
 // 监听路由变化，如果从其他页面进入且已选择审判员类型，自动开始
 onMounted(async () => {
+  // 如果有案件ID，从数据库加载案件信息（包括审判员类型和策略）
+  if (caseStore.caseId) {
+    console.log('[Debate] 从数据库加载案件信息，caseId:', caseStore.caseId)
+    const loaded = await caseStore.loadCaseFromDatabase(caseStore.caseId)
+    if (loaded) {
+      console.log('[Debate] 案件信息加载成功')
+      // 更新本地状态（从 store 恢复）
+      if (caseStore.selectedJudgeType) {
+        selectedJudgeType.value = caseStore.selectedJudgeType
+      }
+      if (caseStore.opponentStrategy) {
+        opponentStrategy.value = caseStore.opponentStrategy
+      }
+      console.log('[Debate] 恢复的数据:', {
+        judgeType: selectedJudgeType.value,
+        strategy: opponentStrategy.value
+      })
+    } else {
+      console.warn('[Debate] 案件信息加载失败')
+    }
+  }
+  
   // 进入辩论阶段时，自动初始化模型
   initModel()
   

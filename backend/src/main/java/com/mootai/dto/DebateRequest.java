@@ -19,7 +19,7 @@ public class DebateRequest {
     @NotNull(message = "对话历史不能为空")
     private List<Map<String, Object>> messages; // 对话历史
     
-    private String judgeType = "neutral"; // 审判员类型
+    private String judgeType = "professional"; // 审判员类型
     
     private String caseDescription = ""; // 案件描述
     

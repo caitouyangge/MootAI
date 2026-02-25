@@ -1259,7 +1259,7 @@ def debate_generate_legacy_format(data):
     user_identity = data.get('user_identity')  # 'plaintiff' 或 'defendant'
     current_role = data.get('current_role')  # 'judge', 'plaintiff', 'defendant'
     messages = data.get('messages', [])  # 对话历史
-    judge_type = data.get('judge_type', 'neutral')  # 审判员类型
+    judge_type = data.get('judge_type', 'professional')  # 审判员类型
     case_description = data.get('case_description', '')  # 案件描述（现在可能包含完整的background）
     check_mode = data.get('checkMode', False)  # 是否为判断模式
     prompt = data.get('prompt', '')  # 特殊提示词（用于判断模式）
@@ -1624,12 +1624,15 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
     if current_role == 'judge':
         judge_prompts = {
             'professional': '专业型审判员：讲话简洁，业务熟练，判决果断',
-            'strong': '强势型审判员：专业能力出众，细节能力强',
-            'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容',
-            'partial-defendant': '偏袒型审判员：习惯对辩护人宽容',
-            'neutral': '中立型审判员：保持中立，注重程序公正'
+            'strong': '强势型审判员：专业能力极度自信，不接受律师的反驳',
+            'irritable': '暴躁型审判员：急躁易怒，控制力强，常拍桌训人',
+            'lazy': '偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节',
+            'wavering': '摇摆型审判员：优柔寡断，复杂案件时常左右摇摆',
+            'partial': '偏袒型审判员：常替弱者说话，判决会考虑弱者利益',
+            'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方',
+            'partial-defendant': '偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方'
         }
-        base_prompt = f"{judge_prompts.get(judge_type, judge_prompts['neutral'])}\n"
+        base_prompt = f"{judge_prompts.get(judge_type, judge_prompts['professional'])}\n"
         base_prompt += "你是审判员，只能以审判员身份发言。\n\n"
     elif current_role == 'plaintiff':
         base_prompt = "你是公诉人，只能以公诉人身份发言。\n"

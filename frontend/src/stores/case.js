@@ -119,16 +119,17 @@ export const useCaseStore = defineStore('case', () => {
         const caseData = response.data
         
         // 恢复案件信息
-        if (caseData.identity) {
+        if (caseData.identity !== undefined && caseData.identity !== null) {
           selectedIdentity.value = caseData.identity
         }
-        if (caseData.caseDescription) {
+        if (caseData.caseDescription !== undefined && caseData.caseDescription !== null) {
           caseDescription.value = caseData.caseDescription
         }
-        if (caseData.judgeType) {
+        // judgeType 和 opponentStrategy 允许为空字符串，但需要明确设置
+        if (caseData.judgeType !== undefined && caseData.judgeType !== null) {
           selectedJudgeType.value = caseData.judgeType
         }
-        if (caseData.opponentStrategy) {
+        if (caseData.opponentStrategy !== undefined && caseData.opponentStrategy !== null) {
           opponentStrategy.value = caseData.opponentStrategy
         }
         

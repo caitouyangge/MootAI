@@ -146,7 +146,20 @@ def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
     # 详细指令
     system_parts.append("\n\n指令：")
     if agent_role == "审判员":
-        system_parts.append("中立型审判员：保持中立，注重程序公正。")
+        # 默认使用专业型，如果case_obj中有judge_type则使用指定的类型
+        judge_type = case_obj.get("judge_type", "professional")
+        judge_prompts = {
+            'professional': '专业型审判员：讲话简洁，业务熟练，判决果断',
+            'strong': '强势型审判员：专业能力极度自信，不接受律师的反驳',
+            'irritable': '暴躁型审判员：急躁易怒，控制力强，常拍桌训人',
+            'lazy': '偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节',
+            'wavering': '摇摆型审判员：优柔寡断，复杂案件时常左右摇摆',
+            'partial': '偏袒型审判员：常替弱者说话，判决会考虑弱者利益',
+            'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方',
+            'partial-defendant': '偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方'
+        }
+        judge_prompt = judge_prompts.get(judge_type, judge_prompts['professional'])
+        system_parts.append(f"{judge_prompt}。")
         system_parts.append("审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。")
     elif agent_role == "公诉人":
         system_parts.append("公诉人职责：代表国家行使公诉权；出示并质证证据；证明犯罪构成要件；回应辩方意见。")

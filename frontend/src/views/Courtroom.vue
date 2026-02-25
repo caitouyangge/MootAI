@@ -266,6 +266,15 @@ const completeStep = (stepKey) => {
     if (nextStep) {
       stepStatus.value[nextStep.key] = true
       saveStepStatus()
+      
+      // 如果完成的是庭前准备，自动切换到庭中辩论阶段
+      if (stepKey === 'pretrial' && nextStep.key === 'debate') {
+        // 使用 nextTick 确保状态更新后再切换
+        nextTick(() => {
+          activeTab.value = 'debate'
+          ElMessage.success('庭前准备已完成，已自动切换到庭中辩论阶段')
+        })
+      }
     }
   }
 }

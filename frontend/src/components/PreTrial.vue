@@ -763,22 +763,37 @@ const judgeTypes = ref([
   {
     value: 'strong',
     label: '强势型',
-    description: '专业能力出众，细节能力强'
+    description: '专业能力极度自信，不接受律师的反驳'
+  },
+  {
+    value: 'irritable',
+    label: '暴躁型',
+    description: '急躁易怒，控制力强，常拍桌训人'
+  },
+  {
+    value: 'lazy',
+    label: '偷懒型',
+    description: '粗略听案，嫌当事人啰嗦，不重视细节'
+  },
+  {
+    value: 'wavering',
+    label: '摇摆型',
+    description: '优柔寡断，复杂案件时常左右摇摆'
+  },
+  {
+    value: 'partial',
+    label: '偏袒型',
+    description: '常替弱者说话，判决会考虑弱者利益'
   },
   {
     value: 'partial-plaintiff',
     label: '偏袒型（公诉人）',
-    description: '习惯对公诉人宽容'
+    description: '习惯对公诉人宽容，倾向于支持公诉方'
   },
   {
     value: 'partial-defendant',
     label: '偏袒型（辩护人）',
-    description: '习惯对辩护人宽容'
-  },
-  {
-    value: 'neutral',
-    label: '中立型',
-    description: '保持中立，注重程序公正'
+    description: '习惯对辩护人宽容，倾向于支持辩护方'
   }
 ])
 
