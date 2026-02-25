@@ -121,25 +121,32 @@
               <div class="message-name">{{ message.name }}</div>
               <div class="message-bubble message-bubble-left">
                 <div v-if="editingIndex !== index" class="message-text">{{ message.text }}</div>
-                <el-input
-                  v-else
-                  v-model="editingText"
-                  type="textarea"
-                  :autosize="{ minRows: 1, maxRows: 50 }"
-                  class="edit-textarea"
-                  @blur="saveEdit(index)"
-                  @keydown.ctrl.enter="saveEdit(index)"
-                />
-                <div v-if="userIdentity === 'plaintiff' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
-                  <el-button
-                    text
-                    type="primary"
-                    size="small"
-                    class="edit-btn"
-                    @click="startEdit(index, message.text)"
-                  >
-                    编辑
-                  </el-button>
+                <div v-else class="edit-container">
+                  <el-input
+                    v-model="editingText"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 50 }"
+                    class="edit-textarea"
+                  />
+                  <div class="edit-actions">
+                    <el-button
+                      type="default"
+                      size="small"
+                      class="edit-action-btn"
+                      @click="cancelEdit"
+                    >
+                      取消
+                    </el-button>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      class="edit-action-btn"
+                      @click="resendMessage(index)"
+                      :disabled="!editingText.trim()"
+                    >
+                      重新发送
+                    </el-button>
+                  </div>
                 </div>
               </div>
               <div class="message-time">
@@ -147,6 +154,31 @@
                 <span v-if="message.duration !== null && message.duration !== undefined" class="message-duration">
                   ({{ message.duration }}s)
                 </span>
+              </div>
+              <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
+              <div v-if="userIdentity === 'plaintiff' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
+                <el-button
+                  text
+                  type="primary"
+                  size="default"
+                  class="edit-btn"
+                  @click="startEdit(index, message.text)"
+                >
+                  编辑
+                </el-button>
+              </div>
+              <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
+              <div v-if="userIdentity !== 'plaintiff' && editingIndex !== index && !isDebateEnded" class="regenerate-btn-wrapper">
+                <el-button
+                  text
+                  type="warning"
+                  size="default"
+                  class="regenerate-btn"
+                  @click="regenerateAiMessage(index)"
+                  :loading="isGenerating"
+                >
+                  重新生成
+                </el-button>
               </div>
             </div>
           </template>
@@ -168,6 +200,19 @@
                     ({{ message.duration }}s)
                   </span>
                 </div>
+                <!-- 重新生成按钮：鼠标悬停时显示在消息下方（审判员消息都是AI生成的） -->
+                <div v-if="!isDebateEnded" class="regenerate-btn-wrapper regenerate-btn-center">
+                  <el-button
+                    text
+                    type="warning"
+                    size="default"
+                    class="regenerate-btn"
+                    @click="regenerateAiMessage(index)"
+                    :loading="isGenerating"
+                  >
+                    重新生成
+                  </el-button>
+                </div>
               </div>
             </div>
           </template>
@@ -179,25 +224,32 @@
                 <div class="message-name message-name-right">{{ message.name }}</div>
                 <div class="message-bubble message-bubble-right">
                   <div v-if="editingIndex !== index" class="message-text">{{ message.text }}</div>
-                  <el-input
-                    v-else
-                    v-model="editingText"
-                    type="textarea"
-                    :autosize="{ minRows: 1, maxRows: 50 }"
-                    class="edit-textarea"
-                    @blur="saveEdit(index)"
-                    @keydown.ctrl.enter="saveEdit(index)"
-                  />
-                  <div v-if="userIdentity === 'defendant' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
-                    <el-button
-                      text
-                      type="primary"
-                      size="small"
-                      class="edit-btn"
-                      @click="startEdit(index, message.text)"
-                    >
-                      编辑
-                    </el-button>
+                  <div v-else class="edit-container">
+                    <el-input
+                      v-model="editingText"
+                      type="textarea"
+                      :autosize="{ minRows: 1, maxRows: 50 }"
+                      class="edit-textarea"
+                    />
+                    <div class="edit-actions">
+                      <el-button
+                        type="default"
+                        size="small"
+                        class="edit-action-btn"
+                        @click="cancelEdit"
+                      >
+                        取消
+                      </el-button>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        class="edit-action-btn"
+                        @click="resendMessage(index)"
+                        :disabled="!editingText.trim()"
+                      >
+                        重新发送
+                      </el-button>
+                    </div>
                   </div>
                 </div>
                 <div class="message-time message-time-right">
@@ -205,6 +257,31 @@
                   <span v-if="message.duration !== null && message.duration !== undefined" class="message-duration">
                     ({{ message.duration }}s)
                   </span>
+                </div>
+                <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
+                <div v-if="userIdentity === 'defendant' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
+                  <el-button
+                    text
+                    type="primary"
+                    size="default"
+                    class="edit-btn"
+                    @click="startEdit(index, message.text)"
+                  >
+                    编辑
+                  </el-button>
+                </div>
+                <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
+                <div v-if="userIdentity !== 'defendant' && editingIndex !== index && !isDebateEnded" class="regenerate-btn-wrapper">
+                  <el-button
+                    text
+                    type="warning"
+                    size="default"
+                    class="regenerate-btn"
+                    @click="regenerateAiMessage(index)"
+                    :loading="isGenerating"
+                  >
+                    重新生成
+                  </el-button>
                 </div>
               </div>
               <div class="message-avatar message-avatar-right">
@@ -490,11 +567,16 @@ const startEdit = (index, text) => {
   editingText.value = text
 }
 
-// 保存编辑
+// 取消编辑
+const cancelEdit = () => {
+  editingIndex.value = -1
+  editingText.value = ''
+}
+
+// 保存编辑（仅保存，不重新发送）
 const saveEdit = async (index) => {
   if (editingIndex.value === index && editingText.value.trim()) {
     messages.value[index].text = editingText.value.trim()
-    // TODO: 基于修改重新生成后续对话（AI部分暂时没有）
     ElMessage.success('内容已更新')
     
     // 保存到localStorage
@@ -510,6 +592,142 @@ const saveEdit = async (index) => {
   }
   editingIndex.value = -1
   editingText.value = ''
+}
+
+// 重新发送编辑后的消息
+const resendMessage = async (index) => {
+  if (editingIndex.value !== index || !editingText.value.trim()) {
+    return
+  }
+  
+  // 如果辩论已结束，不允许重新发送
+  if (isDebateEnded.value || debateCompleted.value) {
+    ElMessage.warning('辩论已结束，无法重新发送消息')
+    cancelEdit()
+    return
+  }
+  
+  // 更新消息内容
+  messages.value[index].text = editingText.value.trim()
+  
+  // 删除该消息之后的所有消息
+  const deletedCount = messages.value.length - index - 1
+  if (deletedCount > 0) {
+    messages.value.splice(index + 1, deletedCount)
+    console.log(`[编辑重发] 删除了 ${deletedCount} 条后续消息`)
+    
+    // 如果删除了消息，需要重置辩论结束状态（如果之前已结束）
+    // 因为删除后续消息后，辩论应该可以继续进行
+    if (isDebateEnded.value) {
+      isDebateEnded.value = false
+      debateCompleted.value = false
+      localStorage.removeItem('debateCompleted')
+      localStorage.removeItem('isDebateEnded')
+    }
+  }
+  
+  // 退出编辑模式
+  editingIndex.value = -1
+  editingText.value = ''
+  
+  // 保存到localStorage
+  localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+  
+  // 保存到数据库
+  if (caseStore.caseId) {
+    clearTimeout(saveDebateMessagesTimer)
+    await saveDebateMessages()
+  }
+  
+  ElMessage.success('消息已重新发送，后续对话已删除')
+  
+  // 从该消息处继续辩论流程
+  await nextTick()
+  
+  // 获取编辑的消息角色
+  const editedMessage = messages.value[index]
+  const editedRole = editedMessage.role
+  
+  // 如果编辑的是用户自己的消息，继续正常的辩论流程
+  if (editedRole === userIdentity.value) {
+    console.log('[编辑重发] 用户消息已重新发送，继续辩论流程')
+    // 重置状态
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+    // 继续辩论流程（检查审判员是否需要介入，或继续轮流发言）
+    await checkJudgeShouldSpeak()
+  } else {
+    // 如果编辑的是AI消息（理论上不应该发生，但为了完整性处理）
+    console.log('[编辑重发] AI消息已重新发送，继续辩论流程')
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
+    await checkJudgeShouldSpeak()
+  }
+}
+
+// 重新生成AI消息
+const regenerateAiMessage = async (index) => {
+  // 如果辩论已结束，不允许重新生成
+  if (isDebateEnded.value || debateCompleted.value) {
+    ElMessage.warning('辩论已结束，无法重新生成消息')
+    return
+  }
+  
+  // 如果正在生成中，不允许重新生成
+  if (isGenerating.value) {
+    ElMessage.warning('正在生成中，请稍候')
+    return
+  }
+  
+  const message = messages.value[index]
+  const messageRole = message.role
+  
+  // 只允许重新生成AI消息（审判员、对方AI律师的消息）
+  if (messageRole === userIdentity.value) {
+    ElMessage.warning('只能重新生成AI生成的消息')
+    return
+  }
+  
+  // 删除该消息及之后的所有消息
+  const deletedCount = messages.value.length - index
+  if (deletedCount > 0) {
+    messages.value.splice(index, deletedCount)
+    console.log(`[重新生成] 删除了 ${deletedCount} 条消息（包括当前消息）`)
+    
+    // 如果删除了消息，需要重置辩论结束状态（如果之前已结束）
+    if (isDebateEnded.value) {
+      isDebateEnded.value = false
+      debateCompleted.value = false
+      localStorage.removeItem('debateCompleted')
+      localStorage.removeItem('isDebateEnded')
+    }
+  }
+  
+  // 保存到localStorage
+  localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+  
+  // 保存到数据库
+  if (caseStore.caseId) {
+    clearTimeout(saveDebateMessagesTimer)
+    await saveDebateMessages()
+  }
+  
+  ElMessage.success('正在重新生成消息...')
+  
+  // 等待DOM更新
+  await nextTick()
+  
+  // 重新生成该消息
+  console.log(`[重新生成] 重新生成角色 ${messageRole} 的消息`)
+  
+  // 根据角色重新生成
+  if (messageRole === 'judge') {
+    // 审判员消息：直接生成（不检查是否需要发言，因为用户明确要求重新生成）
+    await generateAiResponse('judge', '', false, false)
+  } else {
+    // AI律师消息：直接生成
+    await generateAiResponse(messageRole, '', false, false)
+  }
 }
 
 // 开始庭审
@@ -2094,6 +2312,14 @@ onUnmounted(() => {
   display: flex;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+}
+
+/* 鼠标悬停时显示编辑按钮和重新生成按钮 */
+.message-item:hover .edit-btn-wrapper,
+.message-item:hover .regenerate-btn-wrapper {
+  opacity: 1;
+  visibility: visible;
 }
 
 @keyframes fadeIn {
@@ -2307,28 +2533,86 @@ onUnmounted(() => {
 /* 编辑功能 */
 .edit-btn-wrapper {
   margin-top: 4px;
-  text-align: right;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
 
-.message-bubble-left .edit-btn-wrapper {
+.message-content-wrapper .edit-btn-wrapper {
   text-align: left;
 }
 
-.message-bubble-right .edit-btn-wrapper {
+.message-content-right .edit-btn-wrapper {
   text-align: right;
 }
 
 .edit-btn {
-  font-size: 6px;
-  padding: 2px 6px;
+  font-size: 12px;
+  padding: 6px 12px;
   height: auto;
-  min-height: auto;
+  min-height: 28px;
+  font-weight: 500;
+}
+
+/* 重新生成功能 */
+.regenerate-btn-wrapper {
+  margin-top: 4px;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.message-content-wrapper .regenerate-btn-wrapper {
+  text-align: left;
+}
+
+.message-content-right .regenerate-btn-wrapper {
+  text-align: right;
+}
+
+.regenerate-btn-center {
+  text-align: center;
+}
+
+.regenerate-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  height: auto;
+  min-height: 28px;
+  font-weight: 500;
+}
+
+.edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.edit-action-btn {
+  font-size: 12px;
+  padding: 6px 16px;
+  height: auto;
+  min-height: 28px;
 }
 
 :deep(.edit-textarea .el-textarea__inner) {
-  font-size: 6px;
-  padding: 4px 6px;
-  line-height: 1.4;
+  font-size: 12px;
+  padding: 8px 10px;
+  line-height: 1.5;
   overflow-y: visible !important;
   resize: none;
 }
