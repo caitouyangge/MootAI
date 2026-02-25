@@ -85,7 +85,7 @@
       </div>
       <div v-if="!isModelLoading && isDebateEnded" class="debate-ended-notice">
         <div class="notice-icon">🔒</div>
-        <div class="notice-text">法官已决定结束辩论，庭审现场已锁定，除重置按钮外无法交互</div>
+        <div class="notice-text">法官已决定结束辩论，输入区域已隐藏。您仍可使用复制、重置、重新生成和编辑功能。使用这些功能将解除庭审结束状态。</div>
       </div>
       <div class="chat-container" ref="chatContainer">
         <!-- 模型初始化提示 -->
@@ -156,7 +156,7 @@
                 </span>
               </div>
               <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
-              <div v-if="userIdentity === 'plaintiff' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
+              <div v-if="userIdentity === 'plaintiff' && editingIndex !== index" class="edit-btn-wrapper">
                 <el-button
                   text
                   type="primary"
@@ -168,7 +168,7 @@
                 </el-button>
               </div>
               <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
-              <div v-if="userIdentity !== 'plaintiff' && editingIndex !== index && !isDebateEnded" class="regenerate-btn-wrapper">
+              <div v-if="userIdentity !== 'plaintiff' && editingIndex !== index" class="regenerate-btn-wrapper">
                 <el-button
                   text
                   type="warning"
@@ -201,7 +201,7 @@
                   </span>
                 </div>
                 <!-- 重新生成按钮：鼠标悬停时显示在消息下方（审判员消息都是AI生成的） -->
-                <div v-if="!isDebateEnded" class="regenerate-btn-wrapper regenerate-btn-center">
+                <div class="regenerate-btn-wrapper regenerate-btn-center">
                   <el-button
                     text
                     type="warning"
@@ -259,7 +259,7 @@
                   </span>
                 </div>
                 <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
-                <div v-if="userIdentity === 'defendant' && editingIndex !== index && !isDebateEnded" class="edit-btn-wrapper">
+                <div v-if="userIdentity === 'defendant' && editingIndex !== index" class="edit-btn-wrapper">
                   <el-button
                     text
                     type="primary"
@@ -271,7 +271,7 @@
                   </el-button>
                 </div>
                 <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
-                <div v-if="userIdentity !== 'defendant' && editingIndex !== index && !isDebateEnded" class="regenerate-btn-wrapper">
+                <div v-if="userIdentity !== 'defendant' && editingIndex !== index" class="regenerate-btn-wrapper">
                   <el-button
                     text
                     type="warning"
@@ -600,11 +600,13 @@ const resendMessage = async (index) => {
     return
   }
   
-  // 如果辩论已结束，不允许重新发送
+  // 如果辩论已结束，解除结束状态
   if (isDebateEnded.value || debateCompleted.value) {
-    ElMessage.warning('辩论已结束，无法重新发送消息')
-    cancelEdit()
-    return
+    isDebateEnded.value = false
+    debateCompleted.value = false
+    localStorage.removeItem('debateCompleted')
+    localStorage.removeItem('isDebateEnded')
+    ElMessage.info('已解除庭审结束状态，可以继续辩论')
   }
   
   // 更新消息内容
@@ -615,15 +617,6 @@ const resendMessage = async (index) => {
   if (deletedCount > 0) {
     messages.value.splice(index + 1, deletedCount)
     console.log(`[编辑重发] 删除了 ${deletedCount} 条后续消息`)
-    
-    // 如果删除了消息，需要重置辩论结束状态（如果之前已结束）
-    // 因为删除后续消息后，辩论应该可以继续进行
-    if (isDebateEnded.value) {
-      isDebateEnded.value = false
-      debateCompleted.value = false
-      localStorage.removeItem('debateCompleted')
-      localStorage.removeItem('isDebateEnded')
-    }
   }
   
   // 退出编辑模式
@@ -667,10 +660,13 @@ const resendMessage = async (index) => {
 
 // 重新生成AI消息
 const regenerateAiMessage = async (index) => {
-  // 如果辩论已结束，不允许重新生成
+  // 如果辩论已结束，解除结束状态
   if (isDebateEnded.value || debateCompleted.value) {
-    ElMessage.warning('辩论已结束，无法重新生成消息')
-    return
+    isDebateEnded.value = false
+    debateCompleted.value = false
+    localStorage.removeItem('debateCompleted')
+    localStorage.removeItem('isDebateEnded')
+    ElMessage.info('已解除庭审结束状态，可以继续辩论')
   }
   
   // 如果正在生成中，不允许重新生成
@@ -693,14 +689,6 @@ const regenerateAiMessage = async (index) => {
   if (deletedCount > 0) {
     messages.value.splice(index, deletedCount)
     console.log(`[重新生成] 删除了 ${deletedCount} 条消息（包括当前消息）`)
-    
-    // 如果删除了消息，需要重置辩论结束状态（如果之前已结束）
-    if (isDebateEnded.value) {
-      isDebateEnded.value = false
-      debateCompleted.value = false
-      localStorage.removeItem('debateCompleted')
-      localStorage.removeItem('isDebateEnded')
-    }
   }
   
   // 保存到localStorage
@@ -1120,24 +1108,69 @@ const checkJudgeShouldSpeak = async () => {
           '进入最后陈述环节',
           '现在进入最后陈述环节',
           '最后陈述阶段',
+          '最后陈述',
+          '发表最后陈述',
+          '进行最后陈述',
           '现在进行法庭辩论',
           '进入法庭辩论'
         ]
         
-        for (const phrase of forbiddenPhrases) {
-          if (judgeResponse.includes(phrase)) {
-            console.warn('[辩论流程] 检测到禁止的短语:', phrase, '，自动过滤')
-            // 移除包含禁止短语的句子
+        // 特殊处理：如果包含"最后陈述"相关短语，说明AI错误地提到了不存在的环节
+        // 这种情况下，如果同时包含结束关键词，应该直接结束辩论
+        const lastStatementPhrases = ['最后陈述', '进入最后陈述环节', '现在进入最后陈述环节', '最后陈述阶段', '发表最后陈述', '进行最后陈述']
+        const hasLastStatement = lastStatementPhrases.some(phrase => judgeResponse.includes(phrase))
+        const endKeywords = ['休庭', '评议', '结束', '合议庭', '尾声', '作出裁判', '依法作出裁判', '依法对本案作出裁判', '作出公正判决', '作出判决', '庭审结束', '辩论结束', '法庭辩论结束']
+        const hasEndKeyword = endKeywords.some(keyword => judgeResponse.includes(keyword))
+        
+        if (hasLastStatement) {
+          console.warn('[辩论流程] 检测到AI错误地提到了"最后陈述环节"（系统不存在此环节）')
+          if (hasEndKeyword) {
+            // 如果同时包含结束关键词，说明AI想结束，但错误地提到了最后陈述
+            // 过滤掉最后陈述相关内容，保留结束相关内容
+            console.warn('[辩论流程] 同时包含结束关键词，过滤掉"最后陈述"相关内容，保留结束内容')
             const sentences = judgeResponse.split(/[。！？\n]/)
             judgeResponse = sentences
-              .filter(s => !forbiddenPhrases.some(fp => s.includes(fp)))
+              .filter(s => !lastStatementPhrases.some(fp => s.includes(fp)))
+              .join('。')
+              .trim()
+            // 如果过滤后为空或太短，说明没有有效的结束内容，需要添加总结
+            if (!judgeResponse || judgeResponse.length < 50) {
+              console.warn('[辩论流程] 过滤后内容过短，说明缺少总结，需要重新生成或添加总结')
+              // 这种情况下，如果包含结束关键词，应该结束，但需要提醒缺少总结
+              // 为了不影响流程，我们保留一个简短的结束语
+              judgeResponse = '综合全案事实、证据及双方辩论意见，本庭认为案件事实清楚，证据确实充分。现宣布法庭辩论结束，将择日宣判。'
+            }
+          } else {
+            // 只包含最后陈述，不包含结束关键词，说明AI想进入不存在的环节
+            // 过滤掉最后陈述相关内容
+            console.warn('[辩论流程] 过滤掉"最后陈述"相关内容')
+            const sentences = judgeResponse.split(/[。！？\n]/)
+            judgeResponse = sentences
+              .filter(s => !lastStatementPhrases.some(fp => s.includes(fp)))
               .join('。')
               .trim()
             // 如果过滤后为空，则设置为不需要发言
             if (!judgeResponse) {
               judgeResponse = '不需要发言'
             }
-            break
+          }
+        } else {
+          // 正常过滤其他禁止短语
+          for (const phrase of forbiddenPhrases) {
+            if (judgeResponse.includes(phrase)) {
+              console.warn('[辩论流程] 检测到禁止的短语:', phrase, '，自动过滤')
+              // 移除包含禁止短语的句子
+              const sentences = judgeResponse.split(/[。！？\n]/)
+              judgeResponse = sentences
+                .filter(s => !forbiddenPhrases.some(fp => s.includes(fp)))
+                .join('。')
+                .trim()
+              // 如果过滤后为空，则设置为不需要发言
+              if (!judgeResponse) {
+                judgeResponse = '不需要发言'
+              }
+              break
+            }
           }
         }
       }
@@ -1768,7 +1801,7 @@ const handleResetDebate = async () => {
   // 清空消息历史
   messages.value = []
   
-  // 重置状态
+  // 重置状态（包括解除庭审结束状态）
   debateStarted.value = false
   debateCompleted.value = false
   isDebateEnded.value = false

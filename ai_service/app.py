@@ -1267,11 +1267,26 @@ def debate_generate_training_format(data):
     }
     check_role = role_map_for_check.get(agent_role, agent_role)
     
+    is_duplicate = False
     if check_duplicate_speech(cleaned_response, context_messages, check_role):
         logger.warning(f"[重复检测] 检测到重复发言，拒绝生成（角色: {agent_role}）")
+        logger.warning(f"[重复检测] 重复内容预览: {cleaned_response[:100]}...")
+        is_duplicate = True
         # 如果是重复发言，返回一个提示信息
         if agent_role == '审判员':
             cleaned_response = "不需要发言"
+            # 对于审判员，设置跳过标志，让前端知道这是被拒绝的重复发言
+            # 前端会检测到 is_skipped 标志并跳过显示，不会将"不需要发言"显示给用户
+            logger.info(f"[重复检测] 已设置跳过标志，前端将跳过此次发言显示")
+            return jsonify({
+                'code': 200,
+                'data': cleaned_response,
+                'role': agent_role,
+                'success': True,
+                'judge_skip_count': judge_skip_count,
+                'is_skipped': True,
+                'is_duplicate': True
+            })
         else:
             cleaned_response = f"{agent_role}：我方已在前面的发言中表达了相关观点，不再重复。"
             logger.warning(f"[重复检测] 已替换为简短提示（角色: {agent_role}）")
@@ -1281,7 +1296,8 @@ def debate_generate_training_format(data):
         'data': cleaned_response,
         'role': agent_role,
         'success': True,
-        'judge_skip_count': judge_skip_count if agent_role == '审判员' else 0
+        'judge_skip_count': judge_skip_count if agent_role == '审判员' else 0,
+        'is_duplicate': is_duplicate
     })
 
 
@@ -1466,12 +1482,26 @@ def debate_generate_legacy_format(data):
         logger.info(f"[旧格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复
+    is_duplicate = False
     if check_duplicate_speech(cleaned_response, messages, current_role):
         logger.warning(f"[重复检测] 检测到重复发言，拒绝生成（角色: {current_role}）")
+        logger.warning(f"[重复检测] 重复内容预览: {cleaned_response[:100]}...")
+        is_duplicate = True
         # 如果是重复发言，返回一个提示信息，让前端知道需要重新生成
         # 对于法官，返回"不需要发言"；对于其他角色，返回一个简短的提示
         if current_role == 'judge':
             cleaned_response = "不需要发言"
+            # 对于审判员，设置跳过标志，让前端知道这是被拒绝的重复发言
+            # 前端会检测到 is_skipped 标志并跳过显示，不会将"不需要发言"显示给用户
+            logger.info(f"[重复检测] 已设置跳过标志，前端将跳过此次发言显示")
+            return jsonify({
+                'code': 200,
+                'data': cleaned_response,
+                'role': current_role,
+                'success': True,
+                'is_skipped': True,
+                'is_duplicate': True
+            })
         else:
             # 对于公诉人和辩护人，如果重复，返回一个简短的提示
             role_name_map = {
@@ -1486,7 +1516,8 @@ def debate_generate_legacy_format(data):
         'code': 200,
         'data': cleaned_response,
         'role': current_role,
-        'success': True
+        'success': True,
+        'is_duplicate': is_duplicate
     })
 
 
@@ -1561,10 +1592,11 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
     if agent_role == '审判员':
         base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
+        base_prompt += "\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。如果辩论结束，直接宣布\"辩论结束\"即可，不要提到任何不存在的环节。\n"
         # 单独强调结束语要求，确保模型理解
         base_prompt += "\n【极其重要】结束辩论的时机和要求：\n"
         base_prompt += "1. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能宣布\"辩论结束\"。如果争议焦点尚未明确或双方仍在激烈辩论，应继续引导辩论，不要过早结束。\n"
-        base_prompt += "2. 结束格式：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。禁止只说\"辩论结束\"而不进行总结。正确的结束方式应该是：先进行完整总结（至少200-300字），然后再说\"辩论结束\"。\n"
+        base_prompt += "2. 结束格式：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。禁止只说\"辩论结束\"而不进行总结。正确的结束方式应该是：先进行完整总结（至少200-300字），然后再说\"辩论结束\"。禁止在结束前提到\"最后陈述\"等不存在的环节。\n"
     elif agent_role == '辩护人':
         base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif agent_role == '公诉人':
@@ -1705,6 +1737,7 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
     # 为各角色添加特殊约束
     if current_role == 'judge':
         base_prompt += "约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"、\"辩论结束\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
+        base_prompt += "【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。如果辩论结束，直接宣布\"辩论结束\"即可，不要提到任何不存在的环节。结束前必须先进行完整总结（至少200-300字），然后再说\"辩论结束\"。\n"
     elif current_role == 'defendant':
         base_prompt += "约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；禁止以审判员口吻提问（如\"辩护人，对于...你方如何回应?\"），必须直接陈述辩护观点；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif current_role == 'plaintiff':
