@@ -1200,6 +1200,10 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
       
       addMessage(role, roleName, aiText, parseFloat(duration))
       
+      // 确保消息已添加到响应式数组，等待Vue更新DOM
+      await nextTick()
+      console.log('[辩论流程] 消息已添加，当前消息数量:', messages.value.length)
+      
       // 如果是首次审判员发言，保存文本以便后续处理
       if (isFirstJudgeSpeech && role === 'judge') {
         firstJudgeSpeechText = aiText
@@ -1295,13 +1299,16 @@ const addMessage = (role, name, text, duration = null) => {
   const now = new Date()
   const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
   
-  messages.value.push({
+  const newMessage = {
     role,
     name,
     text,
     time,
     duration // AI生成耗时（秒），null表示用户消息或没有耗时信息
-  })
+  }
+  
+  messages.value.push(newMessage)
+  console.log('[消息添加] 添加消息成功 - 角色:', name, ', 内容长度:', text.length, ', 当前消息总数:', messages.value.length, ', 内容预览:', text.substring(0, 50))
   
   // 实时保存对话历史到localStorage
   localStorage.setItem('debateMessages', JSON.stringify(messages.value))
