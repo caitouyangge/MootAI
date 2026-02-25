@@ -2855,18 +2855,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-.debate-chat-section.debate-ended::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.7);
-  z-index: 10;
-  pointer-events: none;
-}
-
 .debate-ended-notice {
   display: flex;
   align-items: center;
