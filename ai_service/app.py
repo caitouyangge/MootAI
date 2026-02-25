@@ -1005,18 +1005,21 @@ def debate_generate_training_format(data):
     # 记录实际生成的回复内容（用于调试）
     logger.info(f"[训练格式] 原始回复内容: {response[:500] if len(response) > 500 else response}")
     
-    # 清理特殊标记
+    # 清理特殊标记（移除模型生成时可能出现的特殊标记，如 <|im_end|>, <|im_start|> 等）
     cleaned_response = clean_special_tokens(response)
-    logger.info(f"[训练格式] 清理后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
-    
-    # 去除重复的角色前缀
-    cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role)
     if cleaned_response != response:
+        logger.info(f"[训练格式] 清理特殊标记后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+    
+    # 去除重复的角色前缀（去除重复前缀如"辩护人：辩护人："或单个前缀"辩护人："，因为前端会自己添加角色名）
+    before_prefix = cleaned_response
+    cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role)
+    if cleaned_response != before_prefix:
         logger.info(f"[训练格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
-    # 过滤审判员式的发言模式（对于公诉人和辩护人）
+    # 过滤审判员式的发言模式（对于公诉人和辩护人，过滤掉审判员式的发言模式，如"现在进入辩论环节"等）
+    before_filter = cleaned_response
     cleaned_response = filter_judge_style_speech(cleaned_response, agent_role)
-    if cleaned_response != response:
+    if cleaned_response != before_filter:
         logger.info(f"[训练格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复（需要将context转换为messages格式进行检查）
@@ -1216,23 +1219,27 @@ def debate_generate_legacy_format(data):
     
     logger.debug(f"[旧格式] 生成回复长度: {len(response)}")
     
-    # 清理特殊标记
+    # 清理特殊标记（移除模型生成时可能出现的特殊标记，如 <|im_end|>, <|im_start|> 等）
     cleaned_response = clean_special_tokens(response)
+    if cleaned_response != response:
+        logger.info(f"[旧格式] 清理特殊标记后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
-    # 去除重复的角色前缀
+    # 去除重复的角色前缀（去除重复前缀如"辩护人：辩护人："或单个前缀"辩护人："，因为前端会自己添加角色名）
     role_name_map = {
         'judge': '审判员',
         'plaintiff': '公诉人',
         'defendant': '辩护人'
     }
     agent_role_name = role_name_map.get(current_role, current_role)
+    before_prefix = cleaned_response
     cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role_name)
-    if cleaned_response != response:
+    if cleaned_response != before_prefix:
         logger.info(f"[旧格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
-    # 过滤审判员式的发言模式（对于公诉人和辩护人）
+    # 过滤审判员式的发言模式（对于公诉人和辩护人，过滤掉审判员式的发言模式，如"现在进入辩论环节"等）
+    before_filter = cleaned_response
     cleaned_response = filter_judge_style_speech(cleaned_response, agent_role_name)
-    if cleaned_response != response:
+    if cleaned_response != before_filter:
         logger.info(f"[旧格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
     # 检查是否与历史消息重复
