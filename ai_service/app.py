@@ -164,7 +164,10 @@ def filter_judge_style_speech(text: str, agent_role: str) -> str:
     if not text or agent_role == '审判员':
         return text
     
-    # 定义审判员式的发言模式（阶段转换语）
+    import re
+    filtered_text = text
+    
+    # 定义审判员式的发言模式（阶段转换语和总结性表达）
     judge_style_patterns = [
         r'现在进入辩论环节[。，]?',
         r'现在进行法庭辩论[。，]?',
@@ -173,10 +176,32 @@ def filter_judge_style_speech(text: str, agent_role: str) -> str:
         r'现在开始.*?[。，]?',
         r'进入.*?环节[。，]?',
         r'现在.*?环节[。，]?',
+        # 新增：总结性表达
+        r'审判员总结.*?[。，]?',
+        r'总结辩论[。，]?',
+        r'总结.*?辩论[。，]?',
+        r'本庭总结[。，]?',
+        r'法庭总结[。，]?',
     ]
     
-    import re
-    filtered_text = text
+    # 定义方括号内的审判员式内容模式（如"[审判员总结辩论]"）
+    bracket_patterns = [
+        r'\[审判员.*?\]',
+        r'\[总结.*?\]',
+        r'\[法庭.*?\]',
+        r'\[本庭.*?\]',
+    ]
+    
+    # 先处理方括号内的内容（这些通常是模型生成的注释性内容，应该完全移除）
+    has_bracket_content = False
+    for pattern in bracket_patterns:
+        if re.search(pattern, filtered_text):
+            has_bracket_content = True
+            logger.warning(f"[审判员口吻检测] 检测到方括号内的审判员式内容（角色: {agent_role}）")
+            logger.warning(f"[审判员口吻检测] 匹配模式: {pattern}")
+            logger.warning(f"[审判员口吻检测] 原始内容: {filtered_text[:200]}")
+            # 移除方括号及其内容
+            filtered_text = re.sub(pattern, '', filtered_text)
     
     # 检查是否包含审判员式的发言模式
     has_judge_style = False
@@ -189,10 +214,12 @@ def filter_judge_style_speech(text: str, agent_role: str) -> str:
             break
     
     if has_judge_style:
-        # 尝试移除审判员式的开头部分
+        # 尝试移除审判员式的开头和结尾部分
         for pattern in judge_style_patterns:
             # 移除匹配的模式及其后面的标点符号和换行
             filtered_text = re.sub(pattern + r'[\s\n]*', '', filtered_text, flags=re.IGNORECASE)
+            # 也移除文本末尾的模式（如"总结辩论"可能在末尾）
+            filtered_text = re.sub(r'[\s\n]*' + pattern + r'$', '', filtered_text, flags=re.IGNORECASE | re.MULTILINE)
         
         # 如果过滤后文本为空或太短，保留原始文本但添加警告
         if len(filtered_text.strip()) < 10:
@@ -200,6 +227,10 @@ def filter_judge_style_speech(text: str, agent_role: str) -> str:
             filtered_text = text
         else:
             logger.info(f"[审判员口吻检测] 已过滤审判员式发言，过滤后内容: {filtered_text[:200]}")
+    
+    # 如果只检测到方括号内容，也记录日志
+    if has_bracket_content and not has_judge_style:
+        logger.info(f"[审判员口吻检测] 已移除方括号内的审判员式内容，过滤后内容: {filtered_text[:200]}")
     
     return filtered_text.strip()
 
@@ -325,7 +356,7 @@ def check_duplicate_speech(new_text: str, messages: list, current_role: str, sim
         similarity = calculate_text_similarity(new_text_clean, old_text_clean)
         
         # 对于审判员的短指令，使用更低的相似度阈值
-        threshold = 0.75 if is_judge_short_command else similarity_threshold
+        threshold = 0.85 if is_judge_short_command else similarity_threshold
         
         if similarity >= threshold:
             logger.warning(f"[重复检测] 检测到高度相似的发言（角色: {current_role}, 相似度: {similarity:.2f}）")
@@ -1518,14 +1549,22 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     # 4.6. 强调只关注最后一条消息（削弱历史消息干扰）
     base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n\n"
     
+    # 4.7. 禁止元叙述和思考过程输出（关键约束）
+    base_prompt += "【绝对禁止】输出要求：\n"
+    base_prompt += "1. 绝对禁止输出任何思考过程、分析过程、计划、旁白、元叙述\n"
+    base_prompt += "2. 绝对禁止输出任何方括号内的内容（如\"[审判员总结辩论]\"、\"[总结]\"等），这些是注释性内容，不应该出现在最终发言中\n"
+    base_prompt += "3. 绝对禁止输出任何角色名称和冒号（如\"公诉人：\"、\"辩护人：\"、\"审判员：\"），系统会自动添加\n"
+    base_prompt += "4. 只输出最终发言内容，直接进入陈述或反驳，不要有任何前置说明或注释\n"
+    base_prompt += "5. 如果输出中包含方括号、思考过程或元叙述，系统会自动过滤，请确保只输出纯发言内容\n\n"
+    
     # 5. 添加角色约束
     base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
     if agent_role == '审判员':
         base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"、\"辩论结束\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
     elif agent_role == '辩护人':
-        base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
+        base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif agent_role == '公诉人':
-        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止以审判员口吻发言（如\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"、\"请公诉人...\"等），必须直接以第一人称陈述公诉观点（如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
+        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止以审判员口吻发言（如\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"、\"请公诉人...\"等），必须直接以第一人称陈述公诉观点（如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     
     return base_prompt
 
