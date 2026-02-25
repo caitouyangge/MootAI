@@ -97,40 +97,108 @@ def _build_messages(system_prompt: str, history: List[Dict[str, str]], user_text
 
 def build_system_prompt_from_case(case_obj: Dict[str, Any]) -> str:
     """
+    构建系统提示词，格式与训练时的format_dataset函数保持一致
+    
     兼容训练时的数据字段：
     - duty_definition: { role_position, core_obligations, strategic_focus, ethical_boundaries }
     - case_background: str
     """
     duty = case_obj.get("duty_definition", {}) or {}
     role_position = duty.get("role_position", "")
+    # 如果没有role_position，尝试从其他字段推断
+    if not role_position:
+        # 尝试从core_obligations推断角色
+        core_obligations = duty.get("core_obligations", []) or []
+        if any("审判" in str(ob) or "主持" in str(ob) for ob in core_obligations):
+            role_position = "审判员"
+        elif any("公诉" in str(ob) or "指控" in str(ob) for ob in core_obligations):
+            role_position = "公诉人"
+        elif any("辩护" in str(ob) or "维护" in str(ob) for ob in core_obligations):
+            role_position = "辩护人"
+        else:
+            role_position = "审判员"  # 默认值
+    
+    agent_role = role_position
     core_obligations = duty.get("core_obligations", []) or []
     strategic_focus = duty.get("strategic_focus", []) or []
     ethical_boundaries = duty.get("ethical_boundaries", []) or []
     case_background = case_obj.get("case_background", "") or ""
-
-    prompt = (
-        f"角色：{role_position}\n"
-        f"职责：{', '.join(core_obligations)}\n"
-        f"策略：{', '.join(strategic_focus)}\n"
-        f"边界：{', '.join(ethical_boundaries)}\n\n"
-        f"案件背景：\n{case_background}\n\n"
-        "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。"
-    )
     
-    # 为审判员角色添加特殊约束
-    if role_position == '审判员':
-        prompt += "\n约束：禁止自指发言；不指定发言人（系统自动管理）；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。"
+    # 构建与训练时一致的system_parts
+    system_parts = [
+        f"你是{agent_role}，只能以{agent_role}身份发言。",
+    ]
     
-    return prompt
+    # 添加角色职责说明
+    if agent_role == "审判员":
+        system_parts.append("审判员：主持庭审，引导辩论，确保程序公正")
+    elif agent_role == "公诉人":
+        system_parts.append("公诉人：代表国家行使公诉权，指控犯罪事实")
+    elif agent_role == "辩护人":
+        system_parts.append("辩护人：维护被告人合法权益，提出辩护意见")
+    
+    system_parts.append(f"\n重要：对话历史中可能包含公诉人、辩护人的发言，但你必须以{agent_role}身份发言，禁止模仿其他角色的发言风格。")
+    
+    # 案件背景
+    if case_background:
+        system_parts.append(f"\n案件背景：\n{case_background}")
+    
+    # 详细指令
+    system_parts.append("\n\n指令：")
+    if agent_role == "审判员":
+        system_parts.append("中立型审判员：保持中立，注重程序公正。")
+        system_parts.append("审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。")
+    elif agent_role == "公诉人":
+        system_parts.append("公诉人职责：代表国家行使公诉权；出示并质证证据；证明犯罪构成要件；回应辩方意见。")
+    elif agent_role == "辩护人":
+        system_parts.append("辩护人职责：维护被告人合法权益；针对指控提出辩护意见；提出有利于被告人的证据；质疑控方证据。")
+    
+    # 如果有额外的职责定义，添加进去
+    if core_obligations:
+        system_parts.append("\n核心职责：")
+        for i, obligation in enumerate(core_obligations, 1):
+            system_parts.append(f"{i}. {obligation}")
+    
+    if strategic_focus:
+        system_parts.append("\n策略重点：")
+        for i, focus in enumerate(strategic_focus, 1):
+            system_parts.append(f"{i}. {focus}")
+    
+    if ethical_boundaries:
+        system_parts.append("\n道德边界（必须遵守）：")
+        for i, boundary in enumerate(ethical_boundaries, 1):
+            system_parts.append(f"{i}. {boundary}")
+    
+    # 添加通用约束和输出要求
+    system_parts.append("\n约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。")
+    if agent_role == "审判员":
+        system_parts.append("审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"、\"辩论结束\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。")
+    
+    system_parts.append("\n要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。")
+    system_parts.append("\n重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。")
+    system_parts.append(f"\n角色：{agent_role}。")
+    system_parts.append(f"输出要求：仅输出最终发言，禁止思考/计划/元叙述/自述。直接陈述，以\"{agent_role}：\"开头。格式：<final>{agent_role}：发言内容</final>")
+    
+    return "\n".join(system_parts)
 
 
 def add_no_thought_constraint(system_prompt: str, assistant_role: str = "") -> str:
-    role_line = f"\n角色：{assistant_role}。" if assistant_role else ""
-    role_prefix = f"{assistant_role}：" if assistant_role else "公诉人："
+    role_line = f"\n\n你始终扮演：{assistant_role}。" if assistant_role else ""
     return (
         system_prompt.strip()
         + role_line
-        + f"\n输出要求：仅输出最终发言，禁止思考/计划/元叙述/自述。直接陈述，以\"{role_prefix}\"开头。格式：<final>{role_prefix}发言内容</final>"
+        + "\n\n【输出要求（必须严格遵守）】\n"
+        + "1) 只输出你在法庭上的\"最终发言\"，绝对不要输出思考过程、分析过程、计划、旁白、元叙述。\n"
+        + "2) 禁止出现以下任何内容：\n"
+        + "   - 思考过程（如\"我需要\"、\"我将\"、\"我应该\"、\"首先\"、\"接下来\"）\n"
+        + "   - 计划或列表（如\"1. 语气要...\"、\"2. 包含以下要素\"）\n"
+        + "   - 元叙述（如\"给出一份符合要求的发言\"、\"构建一段\"）\n"
+        + "   - 自述性语言（如\"让我\"、\"我现在需要\"、\"请根据以上要求\"）\n"
+        + "3) 直接进入陈述或反驳，语言风格贴合法庭发言。\n"
+        + "4) 【重要】不要输出角色名称和冒号（如\"公诉人：\"、\"辩护人：\"、\"审判员：\"），系统会自动添加。直接输出发言内容即可。\n"
+        + "5) 只写最终发言内容，不要写任何过程性、计划性、分析性的文字。\n"
+        + "6) 输出格式必须为：<final>你的最终发言内容</final>。除了 <final>...</final> 标签内的内容外，不要输出任何其他文字。\n"
+        + "7) 如果输出不符合要求，系统会自动重试，请确保每次输出都是最终发言，不要包含任何思考过程。"
     )
 
 
@@ -154,124 +222,12 @@ def load_case_file(path: str) -> Dict[str, Any]:
 
 
 def extract_final(text: str) -> Optional[str]:
-    """
-    提取 <final> 标签中的内容
-    如果标签不完整（只有开始标签没有结束标签），尝试提取开始标签后的所有内容
-    同时支持错误的标签格式 final>（自动纠正）
-    """
     t = text.strip()
-    
-    # 首先尝试查找正确的 <final> 标签
     start = t.find("<final>")
     end = t.find("</final>")
-    
-    if start != -1:
-        if end != -1 and end > start:
-            # 完整的标签
-            return t[start + len("<final>") : end].strip()
-        else:
-            # 只有开始标签，没有结束标签，提取开始标签后的所有内容
-            content = t[start + len("<final>") :].strip()
-            # 记录警告（用于调试）
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"[extract_final] 检测到不完整的<final>标签，提取内容长度: {len(content)}")
-            return content if content else None
-    
-    # 如果没有找到正确的标签，尝试查找错误的标签格式 final>
-    if start == -1 and "final>" in t:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"[extract_final] 检测到错误的标签格式 'final>'，尝试自动纠正并提取")
-        # 查找 final> 的位置（错误的开始标签）
-        wrong_start = t.find("final>")
-        if wrong_start != -1:
-            # 尝试查找结束标签 </final>
-            end = t.find("</final>", wrong_start)
-            if end != -1:
-                # 找到了结束标签，提取内容（注意：wrong_start 指向 "final>" 的开始，需要加上 "final>" 的长度）
-                content = t[wrong_start + len("final>") : end].strip()
-                logger.info(f"[extract_final] 从错误格式标签中提取内容，长度: {len(content)}")
-                return content if content else None
-            else:
-                # 没有结束标签，提取 final> 后的所有内容
-                content = t[wrong_start + len("final>") :].strip()
-                logger.warning(f"[extract_final] 从错误格式标签中提取内容（无结束标签），长度: {len(content)}")
-                return content if content else None
-    
+    if start != -1 and end != -1 and end > start:
+        return t[start + len("<final>") : end].strip()
     return None
-
-
-def clean_special_tokens(text: str) -> str:
-    """
-    清理文本中的特殊标记（如 <|im_end|>, <|im_start|> 等）
-    
-    Args:
-        text: 原始文本
-    
-    Returns:
-        清理后的文本
-    """
-    if not text:
-        return text
-    
-    # 移除所有特殊标记
-    special_tokens = [
-        '<|im_end|>',
-        '<|im_start|>',
-        '<|im_end|',
-        '<|im_start|',
-        '|im_end|>',
-        '|im_start|>',
-    ]
-    
-    cleaned = text
-    for token in special_tokens:
-        cleaned = cleaned.replace(token, '')
-    
-    return cleaned.strip()
-
-
-def remove_role_prefix(text: str, role: str = "") -> str:
-    """
-    去除文本开头的角色前缀
-    
-    Args:
-        text: 原始文本
-        role: 角色名称（如"审判员"、"公诉人"、"辩护人"），如果为空则尝试自动检测
-    
-    Returns:
-        去除角色前缀后的文本
-    """
-    if not text:
-        return text
-    
-    text = text.strip()
-    
-    # 如果提供了角色名称，优先使用
-    if role:
-        # 尝试去除 "{role}：" 或 "{role}:"
-        prefixes = [
-            f"{role}：",
-            f"{role}:",
-        ]
-        for prefix in prefixes:
-            if text.startswith(prefix):
-                return text[len(prefix):].strip()
-    
-    # 自动检测并去除角色前缀（支持常见角色）
-    common_roles = ["审判员", "公诉人", "辩护人"]
-    for role_name in common_roles:
-        prefixes = [
-            f"{role_name}：",
-            f"{role_name}:",
-        ]
-        for prefix in prefixes:
-            if text.startswith(prefix):
-                return text[len(prefix):].strip()
-    
-    # 如果没有匹配到，返回原文本
-    return text
 
 
 def generate_with_retries(
@@ -295,29 +251,13 @@ def generate_with_retries(
         top_p=top_p,
     )
     
-    # 记录原始生成内容（优化：减少日志输出，改为debug级别）
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.debug(f"[生成调试] 原始生成内容长度: {len(ans)}")
-    
     # 尝试提取 <final> 标签中的内容
     final = extract_final(ans)
     if final:
-        logger.debug(f"[生成调试] 提取到final标签，内容长度: {len(final)}")
-        # 去除角色前缀（因为系统提示词要求输出时包含角色前缀，但前端会自己添加）
-        cleaned = remove_role_prefix(final, assistant_role)
-        # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
-        cleaned = clean_special_tokens(cleaned)
-        logger.debug(f"[生成调试] 最终返回内容长度: {len(cleaned)}")
-        return cleaned
+        return final
     
-    # 如果没有 final 标签，尝试去除角色前缀后返回原始输出
-    logger.debug(f"[生成调试] 未找到final标签，使用原始输出")
-    cleaned = remove_role_prefix(ans, assistant_role)
-    # 清理特殊标记（如 <|im_end|>, <|im_start|> 等）
-    cleaned = clean_special_tokens(cleaned)
-    logger.debug(f"[生成调试] 最终返回内容长度: {len(cleaned)}")
-    return cleaned
+    # 如果没有 final 标签，直接返回原始输出
+    return ans
 
 
 def generate_one(
@@ -393,57 +333,33 @@ def generate_one(
             attention_mask = attention_mask.to(device)
 
     with torch.inference_mode():
-        # 准备生成参数（优化：加快生成速度）
-        # 如果temperature很低，使用greedy decoding（最快）
-        use_greedy = temperature <= 0.1
-        
-        generation_kwargs = {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "max_new_tokens": max_new_tokens,
-            "do_sample": not use_greedy and temperature > 0,  # 低temperature时使用greedy
-            "temperature": temperature if (not use_greedy and temperature > 0) else None,
-            "top_p": top_p if not use_greedy else None,  # greedy时不需要top_p
-            "pad_token_id": tokenizer.eos_token_id,
-            "eos_token_id": tokenizer.eos_token_id,
-            "use_cache": True,  # 启用KV缓存，显著提升速度
-            "repetition_penalty": 1.05 if use_greedy else 1.1,  # greedy时降低惩罚
-            # 优化：使用更快的生成策略
-            "num_beams": 1,  # 禁用beam search，使用greedy decoding更快
-        }
-        
-        # 对于量化模型，使用torch.amp.autocast可能有助于性能（修复警告）
+        # 对于量化模型，使用torch.cuda.amp.autocast可能有助于性能
         if torch.cuda.is_available() and device.type == 'cuda':
-            # 使用新的API避免警告
-            try:
-                with torch.amp.autocast(device_type='cuda', dtype=torch.float16):
-                    output_ids = model.generate(**generation_kwargs)
-            except AttributeError:
-                # 兼容旧版本
-                with torch.cuda.amp.autocast():
-                    output_ids = model.generate(**generation_kwargs)
+            with torch.cuda.amp.autocast():
+                output_ids = model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=temperature > 0,
+                    temperature=temperature if temperature > 0 else None,
+                    top_p=top_p,
+                    pad_token_id=tokenizer.eos_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
         else:
-            output_ids = model.generate(**generation_kwargs)
+            output_ids = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                do_sample=temperature > 0,
+                temperature=temperature if temperature > 0 else None,
+                top_p=top_p,
+                pad_token_id=tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
 
     new_tokens = output_ids[0, input_ids.shape[-1] :]
-    # 使用 skip_special_tokens=False 以确保所有字符都被正确解码
-    # 这样可以避免 < 字符被错误处理
-    decoded = tokenizer.decode(new_tokens, skip_special_tokens=False).strip()
-    
-    # 记录生成信息（优化：减少日志输出，改为debug级别）
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.debug(f"[生成调试] 生成的新token数量: {len(new_tokens)}")
-    logger.debug(f"[生成调试] 解码后内容长度: {len(decoded)}")
-    
-    # 检查并纠正错误的标签格式：将 final> 纠正为 <final>
-    if "<final>" not in decoded and "final>" in decoded:
-        logger.warning(f"[生成调试] 检测到错误的标签格式 'final>'，自动纠正为 '<final>'")
-        # 将所有的 final> 替换为 <final>（处理开始标签）
-        decoded = decoded.replace("final>", "<final>", 1)  # 只替换第一个出现的位置
-        logger.info(f"[生成调试] 已纠正标签格式")
-    
-    return decoded
+    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 def main() -> int:
@@ -451,7 +367,7 @@ def main() -> int:
     parser.add_argument("--adapter_dir", default="court_debate_model", help="LoRA 适配器目录")
     parser.add_argument("--base_model", default=None, help="可选：覆盖 adapter_config.json 里的 base model")
     parser.add_argument("--load_in_4bit", action="store_true", help="启用 4bit 量化加载（需要 bitsandbytes）")
-    parser.add_argument("--max_new_tokens", type=int, default=2048, help="最大生成token数（默认2048，平衡速度和长度）")
+    parser.add_argument("--max_new_tokens", type=int, default=512)
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top_p", type=float, default=0.9)
     parser.add_argument("--system", type=str, default="你是一位专业的法律从业者，需要根据角色定位参与法庭辩论。")
@@ -544,7 +460,6 @@ def main() -> int:
     print(f"  3. 检查网络连接和防火墙设置")
     
     try:
-        print(f"[信息] 提示: 模型加载可能需要几分钟，请耐心等待...")
         model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
             device_map=device_map,

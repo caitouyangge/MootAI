@@ -88,82 +88,23 @@ class CourtDebateModel:
         
         # 加载基础模型
         print(f"[SDK] 加载基础模型...")
-        print(f"[SDK] 提示: 模型加载可能需要几分钟，请耐心等待...")
-        
-        # 检查GPU内存
-        if torch.cuda.is_available() and self.gpu_id is not None:
-            props = torch.cuda.get_device_properties(self.gpu_id)
-            total_memory = props.total_memory / 1024**3
-            allocated = torch.cuda.memory_allocated(self.gpu_id) / 1024**3
-            free_memory = total_memory - allocated
-            print(f"[SDK] GPU内存状态: 总计 {total_memory:.2f}GB, 已用 {allocated:.2f}GB, 可用 {free_memory:.2f}GB")
-            
-            if free_memory < 4.0 and self.load_in_4bit:
-                print(f"[SDK] 警告: GPU可用内存较少（{free_memory:.2f}GB），4bit量化可能需要至少4GB")
-        
-        try:
-            self.model = AutoModelForCausalLM.from_pretrained(
-                base_model_name,
-                device_map=device_map,
-                dtype=torch_dtype,  # 使用 dtype 而不是 torch_dtype（已弃用）
-                quantization_config=quant_config,
-                low_cpu_mem_usage=True,
-                trust_remote_code=True,
-            )
-        except RuntimeError as e:
-            error_msg = str(e)
-            if "out of memory" in error_msg.lower() or "OOM" in error_msg.upper():
-                print(f"\n[SDK] 错误: GPU内存不足！")
-                print(f"[SDK] 错误信息: {error_msg}")
-                print(f"\n[SDK] 解决方案:")
-                print(f"  1. 尝试不使用4bit量化（需要更多内存但可能更稳定）")
-                print(f"  2. 关闭其他占用GPU的程序")
-                print(f"  3. 使用更小的模型")
-                print(f"  4. 检查GPU内存是否足够（建议至少8GB）")
-                raise
-            else:
-                print(f"\n[SDK] 错误: 模型加载失败")
-                print(f"[SDK] 错误信息: {error_msg}")
-                raise
-        except Exception as e:
-            print(f"\n[SDK] 错误: 模型加载时出现异常")
-            print(f"[SDK] 错误类型: {type(e).__name__}")
-            print(f"[SDK] 错误信息: {str(e)}")
-            import traceback
-            print(f"\n[SDK] 详细错误堆栈:")
-            traceback.print_exc()
-            raise
+        self.model = AutoModelForCausalLM.from_pretrained(
+            base_model_name,
+            device_map=device_map,
+            torch_dtype=torch_dtype,
+            quantization_config=quant_config,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+        )
         
         # 加载PEFT适配器
         print(f"[SDK] 加载PEFT适配器...")
-        try:
-            self.model = PeftModel.from_pretrained(
-                self.model,
-                self.adapter_dir,
-                device_map=device_map if self.gpu_id is not None else None
-            )
-            self.model.eval()
-        except Exception as e:
-            print(f"\n[SDK] 错误: PEFT适配器加载失败")
-            print(f"[SDK] 错误类型: {type(e).__name__}")
-            print(f"[SDK] 错误信息: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise
-        
-        # 可选：使用torch.compile优化（PyTorch 2.0+，需要CUDA）
-        # 注意：首次编译会花费一些时间，但后续推理会更快
-        if torch.cuda.is_available() and self.gpu_id is not None:
-            try:
-                # 检查PyTorch版本是否支持compile
-                if hasattr(torch, 'compile') and torch.__version__ >= "2.0.0":
-                    compile_mode = os.getenv("TORCH_COMPILE", "false").lower() == "true"
-                    if compile_mode:
-                        print(f"[SDK] 启用torch.compile优化（首次运行会较慢）...")
-                        self.model = torch.compile(self.model, mode="reduce-overhead")
-                        print(f"[SDK] torch.compile优化已启用")
-            except Exception as e:
-                print(f"[SDK] torch.compile优化失败（可忽略）: {e}")
+        self.model = PeftModel.from_pretrained(
+            self.model,
+            self.adapter_dir,
+            device_map=device_map if self.gpu_id is not None else None
+        )
+        self.model.eval()
         
         # 验证模型设备
         if torch.cuda.is_available() and self.gpu_id is not None:
@@ -179,7 +120,7 @@ class CourtDebateModel:
     def generate(
         self,
         prompt: str,
-        max_new_tokens: int = 2048,  # 默认值改为2048，平衡速度和长度
+        max_new_tokens: int = 512,
         temperature: float = 0.6,
         top_p: float = 0.9,
         system_prompt: Optional[str] = None,
@@ -207,31 +148,6 @@ class CourtDebateModel:
         
         messages = _build_messages(system_prompt, [], prompt)
         
-        # 打印最原始的完整提示词（未加工的）
-        import logging
-        logger = logging.getLogger(__name__)
-        try:
-            # 使用 tokenizer 生成完整的提示词文本（不进行 tokenize）
-            raw_prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,  # 不进行 tokenize，只获取文本
-                add_generation_prompt=True,
-            )
-            logger.info("=" * 80)
-            logger.info("【最原始完整提示词 - 未加工】")
-            logger.info("=" * 80)
-            logger.info(raw_prompt)
-            logger.info("=" * 80)
-        except Exception as e:
-            logger.warning(f"无法生成原始提示词文本: {e}")
-            # 如果无法生成，至少打印消息列表
-            logger.info("=" * 80)
-            logger.info("【完整消息列表 - 未加工】")
-            logger.info("=" * 80)
-            for i, msg in enumerate(messages):
-                logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
-            logger.info("=" * 80)
-        
         response = generate_with_retries(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -247,7 +163,7 @@ class CourtDebateModel:
     def chat(
         self,
         messages: List[Dict[str, str]],
-        max_new_tokens: int = 2048,  # 默认值改为2048，平衡速度和长度
+        max_new_tokens: int = 512,
         temperature: float = 0.6,
         top_p: float = 0.9,
         system_prompt: Optional[str] = None,
@@ -279,31 +195,6 @@ class CourtDebateModel:
             full_messages.append({"role": "system", "content": system_prompt})
         full_messages.extend(messages)
         
-        # 打印最原始的完整提示词（未加工的）
-        import logging
-        logger = logging.getLogger(__name__)
-        try:
-            # 使用 tokenizer 生成完整的提示词文本（不进行 tokenize）
-            raw_prompt = self.tokenizer.apply_chat_template(
-                full_messages,
-                tokenize=False,  # 不进行 tokenize，只获取文本
-                add_generation_prompt=True,
-            )
-            logger.info("=" * 80)
-            logger.info("【最原始完整提示词 - 未加工】")
-            logger.info("=" * 80)
-            logger.info(raw_prompt)
-            logger.info("=" * 80)
-        except Exception as e:
-            logger.warning(f"无法生成原始提示词文本: {e}")
-            # 如果无法生成，至少打印消息列表
-            logger.info("=" * 80)
-            logger.info("【完整消息列表 - 未加工】")
-            logger.info("=" * 80)
-            for i, msg in enumerate(full_messages):
-                logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
-            logger.info("=" * 80)
-        
         response = generate_with_retries(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -320,7 +211,7 @@ class CourtDebateModel:
         self,
         case_file: str,
         prompt: str,
-        max_new_tokens: int = 2048,  # 默认值改为2048，平衡速度和长度
+        max_new_tokens: int = 512,
         temperature: float = 0.6,
         top_p: float = 0.9,
     ) -> str:
@@ -372,7 +263,7 @@ if __name__ == "__main__":
     # 单次生成
     response = model.generate(
         prompt="审判员：请公诉人开始陈述指控事实。",
-        max_new_tokens=2048,  # 设置为2048，平衡速度和长度
+        max_new_tokens=512,
         temperature=0.6
     )
     print("生成结果:")
@@ -385,7 +276,7 @@ if __name__ == "__main__":
         {"role": "assistant", "content": "公诉人：根据起诉书指控..."},
         {"role": "user", "content": "辩护人：针对公诉人的指控..."}
     ]
-    response = model.chat(messages, max_new_tokens=2048)  # 使用2048，平衡速度和长度
+    response = model.chat(messages, max_new_tokens=512)
     print("对话结果:")
     print(response)
     print("\n" + "="*60 + "\n")
@@ -395,9 +286,10 @@ if __name__ == "__main__":
         response = model.generate_from_case(
             case_file="case_demo.json",
             prompt="请开始陈述指控事实。",
-            max_new_tokens=2048  # 使用2048，平衡速度和长度
+            max_new_tokens=512
         )
         print("案件文件生成结果:")
         print(response)
+
 
 

@@ -77,6 +77,79 @@ def clean_special_tokens(text: str) -> str:
     return cleaned.strip()
 
 
+def remove_duplicate_role_prefix(text: str, agent_role: str) -> str:
+    """
+    去除重复的角色前缀（如"公诉人：公诉人：" -> 纯内容）
+    同时去除单个角色前缀（因为前端会自己添加角色名）
+    
+    Args:
+        text: 原始文本
+        agent_role: 当前角色（'审判员'、'公诉人'、'辩护人'等）
+    
+    Returns:
+        去除所有角色前缀后的纯文本内容（前端会自己添加角色名）
+    """
+    if not text:
+        return text
+    
+    import re
+    
+    # 定义角色名称列表
+    role_names = ['审判员', '公诉人', '辩护人']
+    
+    # 检查文本开头是否有重复的角色前缀
+    for role_name in role_names:
+        # 匹配重复的前缀模式（支持中文和英文冒号，以及可能的空白）
+        # 例如："公诉人：公诉人："、"公诉人: 公诉人："、"公诉人：公诉人:"
+        # 匹配一个或多个"角色名+冒号+空白"的组合
+        pattern = rf'^({re.escape(role_name)}[：:]\s*)+'
+        match = re.match(pattern, text)
+        
+        if match:
+            # 找到匹配的重复前缀
+            matched_prefix = match.group(0)
+            # 去除所有重复的前缀，保留内容部分
+            content = text[len(matched_prefix):].lstrip()
+            
+            # 如果内容不为空，继续检查是否还有嵌套的重复
+            if content:
+                # 检查内容是否还以角色名开头（可能还有嵌套的重复）
+                # 例如："公诉人：公诉人：公诉人：内容"
+                if content.startswith(role_name):
+                    # 递归处理，去除可能存在的嵌套重复
+                    content = remove_duplicate_role_prefix(content, agent_role)
+                
+                # 直接返回内容，不添加角色前缀（前端会自己添加）
+                return content
+            else:
+                # 去除前缀后为空，返回原始文本（不应该发生，但保留容错）
+                logger.warning(f"[前缀清理] 去除重复前缀后内容为空，保留原始文本")
+                return text
+    
+    # 如果没有匹配到重复前缀，检查是否有单个角色前缀
+    # 如果有，去除它（因为前端会自己添加角色名）
+    for role_name in role_names:
+        # 匹配单个角色前缀（支持中文和英文冒号）
+        single_prefix_pattern = rf'^{re.escape(role_name)}[：:]\s*'
+        match = re.match(single_prefix_pattern, text)
+        
+        if match:
+            # 找到匹配的前缀
+            matched_prefix = match.group(0)
+            # 去除前缀，保留内容部分
+            content = text[len(matched_prefix):].lstrip()
+            
+            # 如果内容不为空，返回内容（不包含角色前缀）
+            if content:
+                return content
+            else:
+                # 去除前缀后为空，返回原始文本（不应该发生，但保留容错）
+                logger.warning(f"[前缀清理] 去除单个前缀后内容为空，保留原始文本")
+                return text
+    
+    return text
+
+
 def filter_judge_style_speech(text: str, agent_role: str) -> str:
     """
     过滤掉审判员式的发言模式（如"现在进入辩论环节"、"首先由XX发表XX意见"等）
@@ -936,6 +1009,11 @@ def debate_generate_training_format(data):
     cleaned_response = clean_special_tokens(response)
     logger.info(f"[训练格式] 清理后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
     
+    # 去除重复的角色前缀
+    cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role)
+    if cleaned_response != response:
+        logger.info(f"[训练格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+    
     # 过滤审判员式的发言模式（对于公诉人和辩护人）
     cleaned_response = filter_judge_style_speech(cleaned_response, agent_role)
     if cleaned_response != response:
@@ -1141,13 +1219,18 @@ def debate_generate_legacy_format(data):
     # 清理特殊标记
     cleaned_response = clean_special_tokens(response)
     
-    # 过滤审判员式的发言模式（对于公诉人和辩护人）
+    # 去除重复的角色前缀
     role_name_map = {
         'judge': '审判员',
         'plaintiff': '公诉人',
         'defendant': '辩护人'
     }
     agent_role_name = role_name_map.get(current_role, current_role)
+    cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role_name)
+    if cleaned_response != response:
+        logger.info(f"[旧格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+    
+    # 过滤审判员式的发言模式（对于公诉人和辩护人）
     cleaned_response = filter_judge_style_speech(cleaned_response, agent_role_name)
     if cleaned_response != response:
         logger.info(f"[旧格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
