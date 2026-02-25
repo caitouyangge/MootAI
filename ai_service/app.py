@@ -275,6 +275,84 @@ def check_judge_role_confusion(text: str, agent_role: str) -> bool:
     return False
 
 
+def check_judge_ending_without_summary(text: str, agent_role: str) -> bool:
+    """
+    检测审判员是否只说了"辩论结束"而没有进行总结
+    
+    Args:
+        text: 原始文本
+        agent_role: 当前角色（'审判员'、'公诉人'、'辩护人'等）
+    
+    Returns:
+        True表示检测到只有"辩论结束"而没有总结，False表示有总结或不是结束语
+    """
+    if not text or agent_role != '审判员':
+        return False
+    
+    import re
+    
+    # 检查是否包含"辩论结束"相关表达
+    ending_patterns = [
+        r'辩论结束',
+        r'法庭辩论结束',
+        r'辩论.*?结束',
+        r'结束.*?辩论',
+    ]
+    
+    has_ending = False
+    for pattern in ending_patterns:
+        if re.search(pattern, text):
+            has_ending = True
+            break
+    
+    # 如果没有"辩论结束"相关表达，不是结束语，返回False
+    if not has_ending:
+        return False
+    
+    # 如果包含"辩论结束"，检查是否有足够的总结内容
+    # 移除"辩论结束"及其前后的标点符号和空白，检查剩余内容长度
+    text_without_ending = text
+    for pattern in ending_patterns:
+        text_without_ending = re.sub(pattern, '', text_without_ending, flags=re.IGNORECASE)
+    
+    # 清理空白字符
+    text_without_ending = re.sub(r'\s+', ' ', text_without_ending).strip()
+    
+    # 如果去除"辩论结束"后，剩余内容少于100字，认为没有足够的总结
+    if len(text_without_ending) < 100:
+        logger.warning(f"[结束语检查] 检测到只有\"辩论结束\"而没有足够总结（剩余内容长度: {len(text_without_ending)}字符）")
+        logger.warning(f"[结束语检查] 原始内容: {text[:200]}")
+        return True
+    
+    # 检查是否包含总结的关键要素（至少包含其中2个）
+    summary_keywords = [
+        r'总结.*?辩论',
+        r'归纳.*?焦点',
+        r'争议焦点',
+        r'关键.*?情节',
+        r'案件.*?事实',
+        r'本庭.*?认为',
+        r'法庭.*?认为',
+        r'综合.*?事实',
+        r'综合.*?证据',
+        r'双方.*?观点',
+        r'辩论.*?要点',
+    ]
+    
+    keyword_count = 0
+    for pattern in summary_keywords:
+        if re.search(pattern, text_without_ending):
+            keyword_count += 1
+    
+    # 如果关键词少于2个，可能总结不够充分
+    if keyword_count < 2:
+        logger.warning(f"[结束语检查] 检测到总结内容可能不够充分（关键词数量: {keyword_count}）")
+        logger.warning(f"[结束语检查] 原始内容: {text[:200]}")
+        return True
+    
+    return False
+
+
 def check_duplicate_speech(new_text: str, messages: list, current_role: str, similarity_threshold: float = 0.85) -> bool:
     """
     检查新生成的发言是否与历史消息重复
@@ -356,7 +434,7 @@ def check_duplicate_speech(new_text: str, messages: list, current_role: str, sim
         similarity = calculate_text_similarity(new_text_clean, old_text_clean)
         
         # 对于审判员的短指令，使用更低的相似度阈值
-        threshold = 0.85 if is_judge_short_command else similarity_threshold
+        threshold = 0.80 if is_judge_short_command else similarity_threshold
         
         if similarity >= threshold:
             logger.warning(f"[重复检测] 检测到高度相似的发言（角色: {current_role}, 相似度: {similarity:.2f}）")
@@ -1186,9 +1264,11 @@ def debate_generate_training_format(data):
         # 生成回复
         cleaned_response = generate_once()
         
-        # 检查审判员的角色混淆
+        # 检查审判员的角色混淆和结束语格式
         if agent_role == '审判员':
             has_confusion = check_judge_role_confusion(cleaned_response, agent_role)
+            has_ending_without_summary = check_judge_ending_without_summary(cleaned_response, agent_role)
+            
             if has_confusion:
                 if retry_count < max_retries:
                     logger.warning(f"[角色混淆重试] 检测到角色混淆，将进行第{retry_count + 1}次重试")
@@ -1206,8 +1286,26 @@ def debate_generate_training_format(data):
                         'judge_skip_count': judge_skip_count,
                         'is_skipped': True
                     })
+            elif has_ending_without_summary:
+                if retry_count < max_retries:
+                    logger.warning(f"[结束语检查重试] 检测到只有\"辩论结束\"而没有总结，将进行第{retry_count + 1}次重试")
+                    retry_count += 1
+                    continue
+                else:
+                    logger.error(f"[结束语检查重试] 重试{max_retries}次后仍检测到只有\"辩论结束\"而没有总结，使用硬编码结束语")
+                    # 使用硬编码的完整结束语
+                    judge_skip_count += 1
+                    hardcoded_ending = "综合全案事实、证据及双方辩论意见，本庭认为案件事实清楚，证据确实充分。现宣布法庭辩论结束，将择日宣判。"
+                    return jsonify({
+                        'code': 200,
+                        'data': hardcoded_ending,
+                        'role': agent_role,
+                        'success': True,
+                        'judge_skip_count': judge_skip_count,
+                        'is_hardcoded': True
+                    })
             else:
-                # 没有混淆，跳出循环
+                # 没有混淆且结束语格式正确，跳出循环
                 break
         else:
             # 非审判员角色，不需要检查混淆
@@ -1575,9 +1673,11 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n\n"
     
     # 4.5. 添加长度限制要求（强调简洁性但完整表达）
+    # 注意：对于审判员宣布"辩论结束"的情况，必须进行完整总结（至少200-300字），不受此简洁性要求限制
     base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n\n"
     
     # 4.6. 强调只关注最后一条消息（削弱历史消息干扰）
+    # 注意：对于审判员宣布"辩论结束"的情况，需要综合整个对话历史进行总结，不受此原则限制
     base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n\n"
     
     # 4.7. 禁止元叙述和思考过程输出（关键约束）
@@ -1592,11 +1692,17 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
     if agent_role == '审判员':
         base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
-        base_prompt += "\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。如果辩论结束，直接宣布\"辩论结束\"即可，不要提到任何不存在的环节。\n"
-        # 单独强调结束语要求，确保模型理解
-        base_prompt += "\n【极其重要】结束辩论的时机和要求：\n"
+        base_prompt += "\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。\n"
+        # 单独强调结束语要求，确保模型理解（这是最高优先级的要求）
+        base_prompt += "\n【最高优先级】【极其重要】结束辩论的时机和要求（必须严格遵守）：\n"
         base_prompt += "1. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能宣布\"辩论结束\"。如果争议焦点尚未明确或双方仍在激烈辩论，应继续引导辩论，不要过早结束。\n"
-        base_prompt += "2. 结束格式：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。禁止只说\"辩论结束\"而不进行总结。正确的结束方式应该是：先进行完整总结（至少200-300字），然后再说\"辩论结束\"。禁止在结束前提到\"最后陈述\"等不存在的环节。\n"
+        base_prompt += "2. 结束格式（绝对禁止违反）：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
+        base_prompt += "   - 禁止只说\"辩论结束\"而不进行总结。\n"
+        base_prompt += "   - 禁止先宣布\"辩论结束\"再补充总结。\n"
+        base_prompt += "   - 正确的结束方式必须是：先进行完整总结（至少200-300字，必须包含上述四个要点），然后再说\"辩论结束\"。\n"
+        base_prompt += "   - 总结部分不受\"简洁性要求\"限制，必须完整详细。\n"
+        base_prompt += "   - 示例格式：\"[完整的总结内容，至少200-300字，包含四个要点] 辩论结束。\"\n"
+        base_prompt += "   - 禁止在结束前提到\"最后陈述\"等不存在的环节。\n"
     elif agent_role == '辩护人':
         base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif agent_role == '公诉人':

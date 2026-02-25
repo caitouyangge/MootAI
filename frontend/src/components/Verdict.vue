@@ -245,6 +245,8 @@ const generateVerdict = async () => {
       caseDescription: caseDescription.value,
       messages: debateMessages,
       identity: identity.value
+    }, {
+      timeout: 240000 // 4分钟超时，因为需要调用两次外部AI API
     })
     
     if (response.code === 200 && response.data) {

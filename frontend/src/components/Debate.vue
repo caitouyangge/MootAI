@@ -2026,15 +2026,18 @@ onMounted(async () => {
     if (loaded) {
       console.log('[Debate] 案件信息加载成功')
       // 更新本地状态（从 store 恢复）
-      if (caseStore.selectedJudgeType) {
-        selectedJudgeType.value = caseStore.selectedJudgeType
+      // 注意：即使值为空字符串也要设置，确保从数据库加载的值能正确恢复
+      if (caseStore.selectedJudgeType !== undefined && caseStore.selectedJudgeType !== null) {
+        selectedJudgeType.value = caseStore.selectedJudgeType || 'professional'
       }
-      if (caseStore.opponentStrategy) {
-        opponentStrategy.value = caseStore.opponentStrategy
+      if (caseStore.opponentStrategy !== undefined && caseStore.opponentStrategy !== null) {
+        opponentStrategy.value = caseStore.opponentStrategy || 'balanced'
       }
       console.log('[Debate] 恢复的数据:', {
         judgeType: selectedJudgeType.value,
-        strategy: opponentStrategy.value
+        strategy: opponentStrategy.value,
+        storeJudgeType: caseStore.selectedJudgeType,
+        storeStrategy: caseStore.opponentStrategy
       })
     } else {
       console.warn('[Debate] 案件信息加载失败')

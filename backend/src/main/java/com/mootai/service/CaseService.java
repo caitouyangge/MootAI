@@ -49,9 +49,13 @@ public class CaseService {
         if (request.getFileNames() != null) {
             caseEntity.setFileNames(request.getFileNames());
         }
-        // judgeType 和 opponentStrategy 允许设置为 null（如果前端发送 null）
-        caseEntity.setJudgeType(request.getJudgeType());
-        caseEntity.setOpponentStrategy(request.getOpponentStrategy());
+        // judgeType 和 opponentStrategy：如果前端发送了值（包括空字符串），则更新；如果为null，则不更新（保留原值）
+        if (request.getJudgeType() != null) {
+            caseEntity.setJudgeType(request.getJudgeType());
+        }
+        if (request.getOpponentStrategy() != null) {
+            caseEntity.setOpponentStrategy(request.getOpponentStrategy());
+        }
         // debateMessages 允许设置为 null（如果前端发送 null）
         if (request.getDebateMessages() != null) {
             caseEntity.setDebateMessages(request.getDebateMessages());
