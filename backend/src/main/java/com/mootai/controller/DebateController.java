@@ -29,6 +29,7 @@ public class DebateController {
         log.info("当前角色: {}", request.getCurrentRole());
         log.info("审判员类型: {}", request.getJudgeType());
         log.info("对方策略: {}", request.getOpponentStrategy());
+        log.info("用户策略: {}", request.getUserStrategy());
         log.info("对话历史消息数: {}", request.getMessages() != null ? request.getMessages().size() : 0);
         log.info("案件描述长度: {} 字符", request.getCaseDescription() != null ? request.getCaseDescription().length() : 0);
         
@@ -39,7 +40,8 @@ public class DebateController {
                 request.getMessages(),
                 request.getJudgeType(),
                 request.getCaseDescription(),
-                request.getOpponentStrategy()
+                request.getOpponentStrategy(),
+                request.getUserStrategy()
             );
             
             log.info("辩论生成成功，响应长度: {} 字符", response != null ? response.length() : 0);

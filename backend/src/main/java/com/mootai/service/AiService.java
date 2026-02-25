@@ -34,6 +34,7 @@ public class AiService {
      * @param judgeType 审判员类型
      * @param caseDescription 案件描述
      * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
+     * @param userStrategy 用户自己的辩论策略（aggressive, conservative, balanced, defensive）
      * @return AI生成的回复
      */
     public String generateDebateResponse(
@@ -42,14 +43,15 @@ public class AiService {
             List<Map<String, Object>> messages,
             String judgeType,
             String caseDescription,
-            String opponentStrategy
+            String opponentStrategy,
+            String userStrategy
     ) {
         try {
             String url = aiServiceUrl + "/api/debate/generate";
             
             // 转换为训练数据格式
             Map<String, Object> requestBody = convertToTrainingFormat(
-                    userIdentity, currentRole, messages, judgeType, caseDescription, opponentStrategy
+                    userIdentity, currentRole, messages, judgeType, caseDescription, opponentStrategy, userStrategy
             );
             
             HttpHeaders headers = new HttpHeaders();
@@ -107,6 +109,7 @@ public class AiService {
      * @param judgeType 审判员类型
      * @param caseDescription 案件描述（现在包含完整的庭前准备资料）
      * @param opponentStrategy 对方AI律师的辩论策略
+     * @param userStrategy 用户自己的辩论策略
      * @return 训练数据格式的请求体
      */
     private Map<String, Object> convertToTrainingFormat(
@@ -115,7 +118,8 @@ public class AiService {
             List<Map<String, Object>> messages,
             String judgeType,
             String caseDescription,
-            String opponentStrategy
+            String opponentStrategy,
+            String userStrategy
     ) {
         Map<String, Object> requestBody = new HashMap<>();
         
@@ -137,7 +141,7 @@ public class AiService {
         requestBody.put("context", context);
         
         // 4. 转换 instruction（角色指令，包含审判员类型、诉讼策略等）
-        String instruction = buildInstruction(currentRole, judgeType, userIdentity, opponentStrategy);
+        String instruction = buildInstruction(currentRole, judgeType, userIdentity, opponentStrategy, userStrategy);
         requestBody.put("instruction", instruction);
         
         return requestBody;
@@ -198,8 +202,9 @@ public class AiService {
      * @param judgeType 审判员类型
      * @param userIdentity 用户身份（plaintiff 或 defendant）
      * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
+     * @param userStrategy 用户自己的辩论策略（aggressive, conservative, balanced, defensive）
      */
-    private String buildInstruction(String currentRole, String judgeType, String userIdentity, String opponentStrategy) {
+    private String buildInstruction(String currentRole, String judgeType, String userIdentity, String opponentStrategy, String userStrategy) {
         StringBuilder instruction = new StringBuilder();
         
         if ("judge".equalsIgnoreCase(currentRole)) {
@@ -230,11 +235,11 @@ public class AiService {
             instruction.append("\n约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"、\"辩论结束\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；仅审判员/公诉人/辩护人可发言；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）。");
         } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
             instruction.append("公诉人：行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节。");
-            String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy);
+            String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy, userStrategy);
             instruction.append("\n策略：").append(strategy);
         } else if ("defendant".equalsIgnoreCase(currentRole)) {
             instruction.append("辩护人：维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻。");
-            String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy);
+            String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy, userStrategy);
             instruction.append("\n策略：").append(strategy);
         } else {
             instruction.append("保持专业严谨。");
@@ -249,12 +254,28 @@ public class AiService {
      * @param currentRole 当前角色（plaintiff 或 defendant）
      * @param userIdentity 用户身份（plaintiff 或 defendant）
      * @param opponentStrategy 对方AI律师的辩论策略
+     * @param userStrategy 用户自己的辩论策略
      * @return 策略描述
      */
-    private String getStrategyForRole(String currentRole, String userIdentity, String opponentStrategy) {
-        // 如果当前角色是用户自己，使用默认策略（均衡策略）
+    private String getStrategyForRole(String currentRole, String userIdentity, String opponentStrategy, String userStrategy) {
+        // 如果当前角色是用户自己，使用用户选择的策略
         if (currentRole.equalsIgnoreCase(userIdentity)) {
-            return "均衡策略，主张明确，证据充分，但不过度激化矛盾。";
+            if (userStrategy != null && !userStrategy.isEmpty()) {
+                switch (userStrategy.toLowerCase()) {
+                    case "aggressive":
+                        return "激进：强硬立场，积极进攻，不轻易让步，质疑对方证据，强调己方优势";
+                    case "conservative":
+                        return "保守：优先调解，主张温和，可适当让步，避免激化矛盾";
+                    case "balanced":
+                        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
+                    case "defensive":
+                        return "防御：重点防守，回应质疑，保护核心利益，避免主动进攻";
+                    default:
+                        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
+                }
+            }
+            // 如果没有提供用户策略，使用默认均衡策略
+            return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
         }
         
         // 如果当前角色是对手，使用用户选择的对方策略

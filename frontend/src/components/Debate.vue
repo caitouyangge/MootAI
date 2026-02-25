@@ -220,7 +220,7 @@
         <div class="speaking-status">
           <div v-if="isGenerating" class="status-item status-generating">
             <span class="status-icon">⏳</span>
-            <span class="status-text">{{ currentSpeakingRole }}正在发言中...</span>
+            <span class="status-text">{{ currentSpeakingRole }}正在思考中...</span>
           </div>
           <div v-else-if="isUserTurn" class="status-item status-user-turn">
             <span class="status-icon">💬</span>
@@ -1183,6 +1183,7 @@ const generateAiResponse = async (role, prompt, isFirstJudgeSpeech = false, shou
       judgeType: selectedJudgeType.value || 'neutral',
       caseDescription: background, // 使用完整的background，包含所有庭前准备资料
       opponentStrategy: opponentStrategy.value || 'balanced', // 对方AI律师的辩论策略
+      userStrategy: userStrategy.value || 'balanced', // 用户自己的辩论策略
       isFirstJudgeSpeech: isFirstJudgeSpeech // 标记是否为首次审判员发言
     }, {
       timeout: 0 // 取消超时限制，允许AI生成长时间运行

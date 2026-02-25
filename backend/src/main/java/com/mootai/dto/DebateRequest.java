@@ -24,6 +24,8 @@ public class DebateRequest {
     private String caseDescription = ""; // 案件描述
     
     private String opponentStrategy; // 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
+    
+    private String userStrategy; // 用户自己的辩论策略（aggressive, conservative, balanced, defensive）
 }
 
 
