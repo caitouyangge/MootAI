@@ -156,7 +156,7 @@
                 </span>
               </div>
               <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
-              <div v-if="userIdentity === 'plaintiff' && editingIndex !== index" class="edit-btn-wrapper">
+              <div v-if="userIdentity === 'plaintiff' && editingIndex !== index && !isGenerating" class="edit-btn-wrapper">
                 <el-button
                   text
                   type="primary"
@@ -168,7 +168,7 @@
                 </el-button>
               </div>
               <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
-              <div v-if="userIdentity !== 'plaintiff' && editingIndex !== index" class="regenerate-btn-wrapper">
+              <div v-if="userIdentity !== 'plaintiff' && editingIndex !== index && !isGenerating" class="regenerate-btn-wrapper">
                 <el-button
                   text
                   type="warning"
@@ -201,7 +201,7 @@
                   </span>
                 </div>
                 <!-- 重新生成按钮：鼠标悬停时显示在消息下方（审判员消息都是AI生成的） -->
-                <div class="regenerate-btn-wrapper regenerate-btn-center">
+                <div v-if="!isGenerating" class="regenerate-btn-wrapper regenerate-btn-center">
                   <el-button
                     text
                     type="warning"
@@ -259,7 +259,7 @@
                   </span>
                 </div>
                 <!-- 编辑按钮：鼠标悬停时显示在消息下方 -->
-                <div v-if="userIdentity === 'defendant' && editingIndex !== index" class="edit-btn-wrapper">
+                <div v-if="userIdentity === 'defendant' && editingIndex !== index && !isGenerating" class="edit-btn-wrapper">
                   <el-button
                     text
                     type="primary"
@@ -271,7 +271,7 @@
                   </el-button>
                 </div>
                 <!-- 重新生成按钮：鼠标悬停时显示在消息下方（AI生成的消息） -->
-                <div v-if="userIdentity !== 'defendant' && editingIndex !== index" class="regenerate-btn-wrapper">
+                <div v-if="userIdentity !== 'defendant' && editingIndex !== index && !isGenerating" class="regenerate-btn-wrapper">
                   <el-button
                     text
                     type="warning"
@@ -356,7 +356,7 @@
           />
           <div class="input-actions">
             <el-button
-              v-if="useAiProxy"
+              v-if="useAiProxy && !isGenerating"
               type="default"
               :loading="isGenerating"
               :disabled="!isUserTurn || isGenerating"
@@ -365,6 +365,7 @@
               {{ isGenerating ? '生成中...' : 'AI生成发言' }}
             </el-button>
             <el-button
+              v-if="!isGenerating"
               type="primary"
               :loading="isGenerating"
               :disabled="!isUserTurn || !userInput.trim() || isGenerating"

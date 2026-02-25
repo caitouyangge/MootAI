@@ -1177,15 +1177,24 @@ def debate_generate_training_format(data):
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
     # 定义内部函数：执行一次生成
-    def generate_once():
-        """执行一次生成并返回清理后的回复"""
+    def generate_once(enhanced_prompt=None, max_tokens=None):
+        """执行一次生成并返回清理后的回复
+        
+        Args:
+            enhanced_prompt: 可选的增强提示词，如果提供则使用此提示词替代原始system_prompt
+            max_tokens: 可选的最大token数，如果提供则使用此值替代默认的400
+        """
         import time
         gen_start_time = time.time()
         
+        # 使用增强提示词或原始提示词
+        current_system_prompt = enhanced_prompt if enhanced_prompt else system_prompt
+        current_max_tokens = max_tokens if max_tokens else 400
+        
         # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
         full_messages = []
-        if system_prompt:
-            full_messages.append({"role": "system", "content": system_prompt})
+        if current_system_prompt:
+            full_messages.append({"role": "system", "content": current_system_prompt})
         full_messages.extend(formatted_messages)
         
         # 输出最原始的输入提示词（与传递给模型的格式完全一致）
@@ -1193,7 +1202,7 @@ def debate_generate_training_format(data):
         logger.info("【AI调用 - debate_generate_training_format】最原始输入提示词")
         logger.info("=" * 80)
         logger.info(f"助手角色: {agent_role}")
-        logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
+        logger.info(f"参数: max_new_tokens={current_max_tokens}, temperature=0.3, top_p=0.9")
         logger.info(f"完整消息列表数量: {len(full_messages)}")
         logger.info("")
         logger.info("--- 完整原始输入消息列表（按顺序） ---")
@@ -1208,7 +1217,7 @@ def debate_generate_training_format(data):
         logger.info("--- 原始输入消息列表结束 ---")
         logger.info("")
         logger.info("--- 系统提示词（完整） ---")
-        logger.info(system_prompt)
+        logger.info(current_system_prompt)
         logger.info("--- 系统提示词结束 ---")
         logger.info("=" * 80)
         
@@ -1217,10 +1226,10 @@ def debate_generate_training_format(data):
         # 限制生成长度：允许生成足够内容，但通过后处理确保简洁
         response = model.chat(
             messages=formatted_messages,
-            max_new_tokens=400,  # 设置为400 tokens，确保内容完整，通过后处理控制长度
+            max_new_tokens=current_max_tokens,  # 使用动态token数，重试时增加以确保有足够空间生成总结
             temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
             top_p=0.9,
-            system_prompt=system_prompt,
+            system_prompt=current_system_prompt,
             assistant_role=agent_role
         )
         
@@ -1289,7 +1298,12 @@ def debate_generate_training_format(data):
             elif has_ending_without_summary:
                 if retry_count < max_retries:
                     logger.warning(f"[结束语检查重试] 检测到只有\"辩论结束\"而没有总结，将进行第{retry_count + 1}次重试")
+                    # 在重试时动态增强提示词，添加更强烈的约束
+                    enhanced_prompt = system_prompt + "\n\n【紧急提醒】【必须严格遵守】如果你要宣布\"辩论结束\"，绝对禁止只输出\"辩论结束\"四个字。你必须先进行完整的总结（至少200-300字），包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。然后才能说\"辩论结束\"。如果你只输出\"辩论结束\"而不进行总结，系统将拒绝你的输出并强制重试。\n"
                     retry_count += 1
+                    # 使用增强提示词和更大的max_tokens重新生成（确保有足够空间生成总结）
+                    cleaned_response = generate_once(enhanced_prompt=enhanced_prompt, max_tokens=600)
+                    # 继续检查（重新进入循环检查新的cleaned_response）
                     continue
                 else:
                     logger.error(f"[结束语检查重试] 重试{max_retries}次后仍检测到只有\"辩论结束\"而没有总结，使用硬编码结束语")
@@ -1637,6 +1651,12 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     
     role_def = role_definitions.get(agent_role, f'{agent_role}')
     base_prompt = f"你是{agent_role}，只能以{agent_role}身份发言。\n{role_def}\n\n"
+    
+    # 对于审判员，在开头就强调结束语要求（最高优先级）
+    if agent_role == '审判员':
+        base_prompt += "【最高优先级】【绝对禁止违反】结束语格式要求：\n"
+        base_prompt += "如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结（至少200-300字），包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
+        base_prompt += "绝对禁止只输出\"辩论结束\"而不进行总结。正确的格式必须是：先总结（至少200-300字），然后再说\"辩论结束\"。\n\n"
     
     # 禁止模仿对话历史中其他角色的发言风格
     if agent_role == '辩护人':
