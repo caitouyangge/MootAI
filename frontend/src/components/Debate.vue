@@ -1148,6 +1148,34 @@ const checkJudgeShouldSpeak = async () => {
         // 审判员发言
         addMessage('judge', '审判员', judgeResponse, parseFloat(duration))
         
+        // 检查是否应该结束庭审（法官决定结束）
+        // 检测更多表示结束的关键词：休庭、评议、结束、合议庭、尾声、作出裁判、依法作出裁判等
+        const endKeywords = ['休庭', '评议', '结束', '合议庭', '尾声', '作出裁判', '依法作出裁判', '依法对本案作出裁判', '作出公正判决', '作出判决', '庭审结束', '辩论结束', '法庭辩论结束']
+        const shouldEndDebate = endKeywords.some(keyword => judgeResponse.includes(keyword))
+        
+        if (shouldEndDebate) {
+          console.log('[辩论流程] 检测到法官决定结束庭审，标记辩论结束')
+          isDebateEnded.value = true
+          debateCompleted.value = true
+          // 保存对话历史到localStorage，供判决书生成使用
+          localStorage.setItem('debateMessages', JSON.stringify(messages.value))
+          // 标记辩论完成
+          localStorage.setItem('debateCompleted', 'true')
+          localStorage.setItem('isDebateEnded', 'true')
+          // 立即保存到数据库（不等待防抖）
+          if (caseStore.caseId) {
+            clearTimeout(saveDebateMessagesTimer)
+            await saveDebateMessages()
+          }
+          // 触发完成事件
+          emit('complete')
+          ElMessage.info('法官已决定结束辩论，庭审现场已锁定，请点击"生成庭后宣判"按钮')
+          // 重置状态并返回，不再继续流程
+          isGenerating.value = false
+          currentSpeakingRole.value = ''
+          return
+        }
+        
         console.log('[辩论流程] 审判员发言完成，继续正常的发言顺序')
         // 审判员发言后，继续正常的发言顺序
         // 注意：在extractNextSpeakerFromJudgeSpeech中可能会调用generateAiResponse，会设置新的状态
