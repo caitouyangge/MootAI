@@ -453,6 +453,7 @@ const messages = ref([])
 const debateCompleted = ref(false)
 const isDebateEnded = ref(false) // 法官决定结束辩论
 const chatContainer = ref(null)
+const judgeSkipCount = ref(0) // 审判员跳过次数
 
 // 模型初始化状态
 const modelInitializing = ref(false)
@@ -826,7 +827,8 @@ const checkJudgeShouldSpeak = async () => {
       judgeType: selectedJudgeType.value || 'neutral',
       caseDescription: buildBackground(), // 使用完整的background
       checkMode: true, // 标记为判断模式
-      prompt: judgeCheckPrompt
+      prompt: judgeCheckPrompt,
+      judge_skip_count: judgeSkipCount.value // 传递跳过次数
     }, {
       timeout: 0
     })
@@ -836,8 +838,39 @@ const checkJudgeShouldSpeak = async () => {
     const duration = ((endTime - startTime) / 1000).toFixed(2) // 转换为秒，保留2位小数
     
     if (response.code === 200 && response.data) {
+      // 更新跳过计数（如果响应中包含）
+      if (response.judge_skip_count !== undefined) {
+        judgeSkipCount.value = response.judge_skip_count
+        console.log('[辩论流程] 更新审判员跳过次数:', judgeSkipCount.value)
+      }
+      
+      // 检查是否为硬编码结束
+      if (response.is_hardcoded) {
+        console.log('[辩论流程] 审判员跳过次数达到3次，使用硬编码结束语')
+        const hardcodedEnding = response.data.trim()
+        addMessage('judge', '审判员', hardcodedEnding, parseFloat(duration))
+        // 标记辩论已结束
+        isDebateEnded.value = true
+        debateCompleted.value = true
+        return
+      }
+      
       let judgeResponse = response.data.trim()
       console.log('[辩论流程] AI返回审判员响应，长度:', judgeResponse.length, ', 耗时:', duration, '秒, 预览:', judgeResponse.substring(0, 100))
+      
+      // 检查是否为跳过发言
+      const isSkipped = response.is_skipped === true || judgeResponse.includes('不需要发言')
+      
+      if (isSkipped) {
+        console.log('[辩论流程] 审判员跳过此次发言（角色混淆检测失败），继续轮流发言')
+        console.log('[辩论流程] 当前跳过次数:', judgeSkipCount.value)
+        // 审判员跳过发言，由公诉人和辩护人轮流发言
+        // 确保状态正确重置
+        isGenerating.value = false
+        currentSpeakingRole.value = ''
+        await continueAlternatingDebate()
+        return
+      }
       
       // 检查并过滤禁止的短语（如果对话历史不为空）
       if (messages.value.length > 0) {
@@ -888,6 +921,9 @@ const checkJudgeShouldSpeak = async () => {
       } else {
         console.log('[辩论流程] 审判员决定不发言，继续轮流发言')
         // 审判员不发言，由公诉人和辩护人轮流发言
+        // 确保状态正确重置
+        isGenerating.value = false
+        currentSpeakingRole.value = ''
         await continueAlternatingDebate()
       }
     } else {
@@ -896,14 +932,20 @@ const checkJudgeShouldSpeak = async () => {
   } catch (error) {
     console.error('[辩论流程] 审判员判断失败:', error)
     // 如果判断失败，默认继续轮流发言
+    // 确保状态正确重置
+    isGenerating.value = false
+    currentSpeakingRole.value = ''
     await continueAlternatingDebate()
   } finally {
     // 重置生成状态和发言角色
     // 注意：如果extractNextSpeakerFromJudgeSpeech中调用了generateAiResponse，那个函数会设置新的状态
     // 所以这里需要确保状态被正确重置
-    console.log('[辩论流程] 重置审判员发言状态')
-    isGenerating.value = false
-    currentSpeakingRole.value = ''
+    // 但如果已经调用了continueAlternatingDebate，状态可能已经被重置，这里再次确保
+    if (isGenerating.value) {
+      console.log('[辩论流程] 重置审判员发言状态')
+      isGenerating.value = false
+      currentSpeakingRole.value = ''
+    }
     console.log('[辩论流程] 检查审判员是否应该发言 - 结束，状态已重置')
   }
 }
@@ -1457,6 +1499,7 @@ const handleResetDebate = async () => {
   userInput.value = ''
   currentSpeakingRole.value = ''
   isGenerating.value = false
+  judgeSkipCount.value = 0 // 重置跳过计数
   editingIndex.value = -1
   editingText.value = ''
   

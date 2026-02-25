@@ -204,6 +204,46 @@ def filter_judge_style_speech(text: str, agent_role: str) -> str:
     return filtered_text.strip()
 
 
+def check_judge_role_confusion(text: str, agent_role: str) -> bool:
+    """
+    检测审判员的角色混淆表达（如"我方认为"、"建议法庭"等）
+    
+    Args:
+        text: 原始文本
+        agent_role: 当前角色（'审判员'、'公诉人'、'辩护人'等）
+    
+    Returns:
+        True表示检测到角色混淆，False表示没有混淆
+    """
+    if not text or agent_role != '审判员':
+        return False
+    
+    import re
+    
+    # 定义审判员不应该使用的表达模式
+    confusion_patterns = [
+        r'我方认为',
+        r'我方.*?认为',
+        r'建议法庭',
+        r'建议.*?法庭',
+        r'恳请法庭',
+        r'恳请.*?法庭',
+        r'希望法庭',
+        r'希望.*?法庭',
+        r'请求法庭',
+        r'请求.*?法庭',
+    ]
+    
+    # 检测是否包含混淆表达
+    for pattern in confusion_patterns:
+        if re.search(pattern, text):
+            logger.warning(f"[角色混淆检测] 检测到审判员角色混淆（模式: {pattern}）")
+            logger.warning(f"[角色混淆检测] 原始内容: {text[:200]}")
+            return True
+    
+    return False
+
+
 def check_duplicate_speech(new_text: str, messages: list, current_role: str, similarity_threshold: float = 0.85) -> bool:
     """
     检查新生成的发言是否与历史消息重复
@@ -726,14 +766,35 @@ def generate():
         if model is None:
             return jsonify({'error': '模型未加载'}), 500
         
-        # 输出完整的提示词日志
+        # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
+        full_messages = []
+        if system_prompt:
+            full_messages.append({"role": "system", "content": system_prompt})
+        full_messages.append({"role": "user", "content": prompt})
+        
+        # 输出最原始的输入提示词（与传递给模型的格式完全一致）
         logger.info("=" * 80)
-        logger.info("【AI调用 - generate】完整提示词")
+        logger.info("【AI调用 - generate】最原始输入提示词")
         logger.info("=" * 80)
-        logger.info(f"系统提示词: {system_prompt if system_prompt else '(无)'}")
-        logger.info(f"用户提示词: {prompt}")
         logger.info(f"助手角色: {assistant_role if assistant_role else '(无)'}")
         logger.info(f"参数: max_new_tokens={max_tokens}, temperature={temperature}, top_p={top_p}")
+        logger.info(f"完整消息列表数量: {len(full_messages)}")
+        logger.info("")
+        logger.info("--- 完整原始输入消息列表（按顺序） ---")
+        for i, msg in enumerate(full_messages):
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            content_preview = content[:200] + "..." if len(content) > 200 else content
+            logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
+            logger.info(f"  内容预览: {content_preview}")
+            if len(content) > 200:
+                logger.info(f"  完整内容: {content}")
+        logger.info("--- 原始输入消息列表结束 ---")
+        logger.info("")
+        if system_prompt:
+            logger.info("--- 系统提示词（完整） ---")
+            logger.info(system_prompt)
+            logger.info("--- 系统提示词结束 ---")
         logger.info("=" * 80)
         
         response = model.generate(
@@ -780,16 +841,35 @@ def chat():
         if model is None:
             return jsonify({'error': '模型未加载'}), 500
         
-        # 输出完整的提示词日志
+        # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
+        full_messages = []
+        if system_prompt:
+            full_messages.append({"role": "system", "content": system_prompt})
+        full_messages.extend(messages)
+        
+        # 输出最原始的输入提示词（与传递给模型的格式完全一致）
         logger.info("=" * 80)
-        logger.info("【AI调用 - chat】完整提示词")
+        logger.info("【AI调用 - chat】最原始输入提示词")
         logger.info("=" * 80)
-        logger.info(f"系统提示词: {system_prompt if system_prompt else '(无)'}")
-        logger.info(f"消息历史数量: {len(messages)}")
-        for i, msg in enumerate(messages):
-            logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
         logger.info(f"助手角色: {assistant_role if assistant_role else '(无)'}")
         logger.info(f"参数: max_new_tokens={max_tokens}, temperature={temperature}, top_p={top_p}")
+        logger.info(f"完整消息列表数量: {len(full_messages)}")
+        logger.info("")
+        logger.info("--- 完整原始输入消息列表（按顺序） ---")
+        for i, msg in enumerate(full_messages):
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            content_preview = content[:200] + "..." if len(content) > 200 else content
+            logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
+            logger.info(f"  内容预览: {content_preview}")
+            if len(content) > 200:
+                logger.info(f"  完整内容: {content}")
+        logger.info("--- 原始输入消息列表结束 ---")
+        logger.info("")
+        if system_prompt:
+            logger.info("--- 系统提示词（完整） ---")
+            logger.info(system_prompt)
+            logger.info("--- 系统提示词结束 ---")
         logger.info("=" * 80)
         
         response = model.chat(
@@ -880,9 +960,23 @@ def debate_generate_training_format(data):
     role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色
     new_content = data.get('new_content', '')  # 新的内容（如审判员的提问）
     instruction = data.get('instruction', '')  # 角色指令
+    judge_skip_count = data.get('judge_skip_count', 0)  # 审判员跳过次数（从请求中获取）
     
     if not agent_role:
         return jsonify({'error': 'agent_role参数不能为空'}), 400
+    
+    # 如果审判员跳过次数达到3次，直接返回硬编码的结束语（不调用AI）
+    if agent_role == '审判员' and judge_skip_count >= 3:
+        logger.warning(f"[审判员跳过] 跳过次数已达到{judge_skip_count}次，使用硬编码结束语")
+        hardcoded_ending = "综合全案事实、证据及双方辩论意见，本庭认为案件事实清楚，证据确实充分。现宣布法庭辩论结束，将择日宣判。"
+        return jsonify({
+            'code': 200,
+            'data': hardcoded_ending,
+            'role': agent_role,
+            'success': True,
+            'judge_skip_count': judge_skip_count,
+            'is_hardcoded': True
+        })
     
     logger.info(f"[训练格式] ========== 训练格式生成请求 ==========")
     logger.info(f"[训练格式] agent_role: {agent_role}")
@@ -973,54 +1067,133 @@ def debate_generate_training_format(data):
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
-    # 输出完整的提示词日志
-    logger.info("=" * 80)
-    logger.info("【AI调用 - debate_generate_training_format】完整提示词")
-    logger.info("=" * 80)
-    logger.info(f"系统提示词: {system_prompt}")
-    logger.info(f"消息历史数量: {len(formatted_messages)}")
-    for i, msg in enumerate(formatted_messages):
-        logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
-    logger.info(f"助手角色: {agent_role}")
-    logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
-    logger.info("=" * 80)
+    # 定义内部函数：执行一次生成
+    def generate_once():
+        """执行一次生成并返回清理后的回复"""
+        import time
+        gen_start_time = time.time()
+        
+        # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
+        full_messages = []
+        if system_prompt:
+            full_messages.append({"role": "system", "content": system_prompt})
+        full_messages.extend(formatted_messages)
+        
+        # 输出最原始的输入提示词（与传递给模型的格式完全一致）
+        logger.info("=" * 80)
+        logger.info("【AI调用 - debate_generate_training_format】最原始输入提示词")
+        logger.info("=" * 80)
+        logger.info(f"助手角色: {agent_role}")
+        logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
+        logger.info(f"完整消息列表数量: {len(full_messages)}")
+        logger.info("")
+        logger.info("--- 完整原始输入消息列表（按顺序） ---")
+        for i, msg in enumerate(full_messages):
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+            content_preview = content[:200] + "..." if len(content) > 200 else content
+            logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
+            logger.info(f"  内容预览: {content_preview}")
+            if len(content) > 200:
+                logger.info(f"  完整内容: {content}")
+        logger.info("--- 原始输入消息列表结束 ---")
+        logger.info("")
+        logger.info("--- 系统提示词（完整） ---")
+        logger.info(system_prompt)
+        logger.info("--- 系统提示词结束 ---")
+        logger.info("=" * 80)
+        
+        # 使用适中的temperature以获得更好的生成质量（0.3-0.5之间平衡速度和创造性）
+        # 如果temperature=0.0可能导致生成过于保守和简短
+        # 限制生成长度：允许生成足够内容，但通过后处理确保简洁
+        response = model.chat(
+            messages=formatted_messages,
+            max_new_tokens=400,  # 设置为400 tokens，确保内容完整，通过后处理控制长度
+            temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
+            top_p=0.9,
+            system_prompt=system_prompt,
+            assistant_role=agent_role
+        )
+        
+        elapsed_time = time.time() - gen_start_time
+        tokens_per_sec = len(response) / 3 / elapsed_time if elapsed_time > 0 else 0  # 粗略估算
+        logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
+        
+        logger.debug(f"[训练格式] 生成回复长度: {len(response)}")
+        # 记录实际生成的回复内容（用于调试）
+        logger.info(f"[训练格式] 原始回复内容: {response[:500] if len(response) > 500 else response}")
+        
+        # 清理特殊标记（移除模型生成时可能出现的特殊标记，如 <|im_end|>, <|im_start|> 等）
+        cleaned_response = clean_special_tokens(response)
+        if cleaned_response != response:
+            logger.info(f"[训练格式] 清理特殊标记后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+        
+        # 去除重复的角色前缀（去除重复前缀如"辩护人：辩护人："或单个前缀"辩护人："，因为前端会自己添加角色名）
+        before_prefix = cleaned_response
+        cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role)
+        if cleaned_response != before_prefix:
+            logger.info(f"[训练格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+        
+        # 过滤审判员式的发言模式（对于公诉人和辩护人，过滤掉审判员式的发言模式，如"现在进入辩论环节"等）
+        before_filter = cleaned_response
+        cleaned_response = filter_judge_style_speech(cleaned_response, agent_role)
+        if cleaned_response != before_filter:
+            logger.info(f"[训练格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+        
+        return cleaned_response
     
-    # 使用适中的temperature以获得更好的生成质量（0.3-0.5之间平衡速度和创造性）
-    # 如果temperature=0.0可能导致生成过于保守和简短
-    # 限制生成长度：允许生成足够内容，但通过后处理确保简洁
-    response = model.chat(
-        messages=formatted_messages,
-        max_new_tokens=400,  # 设置为400 tokens，确保内容完整，通过后处理控制长度
-        temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
-        top_p=0.9,
-        system_prompt=system_prompt,
-        assistant_role=agent_role
-    )
+    # 重试机制：对于审判员，如果检测到角色混淆，最多重试2次
+    max_retries = 2 if agent_role == '审判员' else 0
+    cleaned_response = None
+    retry_count = 0
+    has_confusion = False
     
-    elapsed_time = time.time() - start_time
-    tokens_per_sec = len(response) / 3 / elapsed_time if elapsed_time > 0 else 0  # 粗略估算
-    logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
+    while retry_count <= max_retries:
+        if retry_count > 0:
+            logger.warning(f"[角色混淆重试] 第{retry_count}次重试生成（角色: {agent_role}）")
+        
+        # 生成回复
+        cleaned_response = generate_once()
+        
+        # 检查审判员的角色混淆
+        if agent_role == '审判员':
+            has_confusion = check_judge_role_confusion(cleaned_response, agent_role)
+            if has_confusion:
+                if retry_count < max_retries:
+                    logger.warning(f"[角色混淆重试] 检测到角色混淆，将进行第{retry_count + 1}次重试")
+                    retry_count += 1
+                    continue
+                else:
+                    logger.error(f"[角色混淆重试] 重试{max_retries}次后仍检测到角色混淆，跳过此次发言")
+                    # 跳过此次发言，返回跳过消息
+                    judge_skip_count += 1
+                    return jsonify({
+                        'code': 200,
+                        'data': "不需要发言",
+                        'role': agent_role,
+                        'success': True,
+                        'judge_skip_count': judge_skip_count,
+                        'is_skipped': True
+                    })
+            else:
+                # 没有混淆，跳出循环
+                break
+        else:
+            # 非审判员角色，不需要检查混淆
+            break
     
-    logger.debug(f"[训练格式] 生成回复长度: {len(response)}")
-    # 记录实际生成的回复内容（用于调试）
-    logger.info(f"[训练格式] 原始回复内容: {response[:500] if len(response) > 500 else response}")
-    
-    # 清理特殊标记（移除模型生成时可能出现的特殊标记，如 <|im_end|>, <|im_start|> 等）
-    cleaned_response = clean_special_tokens(response)
-    if cleaned_response != response:
-        logger.info(f"[训练格式] 清理特殊标记后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
-    
-    # 去除重复的角色前缀（去除重复前缀如"辩护人：辩护人："或单个前缀"辩护人："，因为前端会自己添加角色名）
-    before_prefix = cleaned_response
-    cleaned_response = remove_duplicate_role_prefix(cleaned_response, agent_role)
-    if cleaned_response != before_prefix:
-        logger.info(f"[训练格式] 去除重复前缀后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
-    
-    # 过滤审判员式的发言模式（对于公诉人和辩护人，过滤掉审判员式的发言模式，如"现在进入辩论环节"等）
-    before_filter = cleaned_response
-    cleaned_response = filter_judge_style_speech(cleaned_response, agent_role)
-    if cleaned_response != before_filter:
-        logger.info(f"[训练格式] 过滤审判员口吻后回复内容: {cleaned_response[:500] if len(cleaned_response) > 500 else cleaned_response}")
+    # 如果所有重试都失败（理论上不应该到这里，因为上面已经处理了）
+    if has_confusion and agent_role == '审判员':
+        logger.error(f"[角色混淆] 所有重试都失败，跳过此次发言")
+        judge_skip_count += 1
+        return jsonify({
+            'code': 200,
+            'data': "不需要发言",
+            'role': agent_role,
+            'success': True,
+            'judge_skip_count': judge_skip_count,
+            'is_skipped': True
+        })
     
     # 检查是否与历史消息重复（需要将context转换为messages格式进行检查）
     # 从context中提取历史消息
@@ -1076,7 +1249,8 @@ def debate_generate_training_format(data):
         'code': 200,
         'data': cleaned_response,
         'role': agent_role,
-        'success': True
+        'success': True,
+        'judge_skip_count': judge_skip_count if agent_role == '审判员' else 0
     })
 
 
@@ -1191,16 +1365,34 @@ def debate_generate_legacy_format(data):
     estimated_input_tokens = total_input_chars // 3  # 粗略估算：1 token ≈ 3字符
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
-    # 输出完整的提示词日志
+    # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
+    full_messages = []
+    if system_prompt:
+        full_messages.append({"role": "system", "content": system_prompt})
+    full_messages.extend(formatted_messages)
+    
+    # 输出最原始的输入提示词（与传递给模型的格式完全一致）
     logger.info("=" * 80)
-    logger.info("【AI调用 - debate_generate_legacy_format】完整提示词")
+    logger.info("【AI调用 - debate_generate_legacy_format】最原始输入提示词")
     logger.info("=" * 80)
-    logger.info(f"系统提示词: {system_prompt}")
-    logger.info(f"消息历史数量: {len(formatted_messages)}")
-    for i, msg in enumerate(formatted_messages):
-        logger.info(f"消息[{i}]: role={msg.get('role')}, content={msg.get('content', '')}")
     logger.info(f"助手角色: {assistant_role}")
     logger.info(f"参数: max_new_tokens=350, temperature=0.3, top_p=0.9")
+    logger.info(f"完整消息列表数量: {len(full_messages)}")
+    logger.info("")
+    logger.info("--- 完整原始输入消息列表（按顺序） ---")
+    for i, msg in enumerate(full_messages):
+        role = msg.get('role', '')
+        content = msg.get('content', '')
+        content_preview = content[:200] + "..." if len(content) > 200 else content
+        logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
+        logger.info(f"  内容预览: {content_preview}")
+        if len(content) > 200:
+            logger.info(f"  完整内容: {content}")
+    logger.info("--- 原始输入消息列表结束 ---")
+    logger.info("")
+    logger.info("--- 系统提示词（完整） ---")
+    logger.info(system_prompt)
+    logger.info("--- 系统提示词结束 ---")
     logger.info("=" * 80)
     
     # 限制生成长度：500字左右 ≈ 300-350 tokens（中文字符token化更高效）
@@ -1293,6 +1485,11 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
         base_prompt += "【极其重要】对话历史中可能包含审判员的发言（如\"请公诉人发表公诉意见\"等），但你必须以公诉人身份直接陈述观点，绝对禁止模仿审判员的发言风格。禁止生成任何审判员式的发言，包括但不限于：\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"等阶段转换语。禁止以第三人称称呼自己，禁止以审判员口吻发言。你必须直接以第一人称陈述公诉观点，例如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等。\n\n"
     elif agent_role == '审判员':
         base_prompt += "重要：对话历史中可能包含公诉人、辩护人的发言，但你必须以审判员身份发言，禁止模仿其他角色的发言风格。\n\n"
+        base_prompt += "【极其重要】绝对禁止使用以下表达方式：\n"
+        base_prompt += "1. 禁止使用'我方认为'、'我方认为...'等第一人称表达（这是公诉人或辩护人的口吻，审判员应该使用'本庭认为'、'法庭认为'）\n"
+        base_prompt += "2. 禁止使用'建议法庭'、'恳请法庭'、'希望法庭'等表达（审判员就是法庭，不应该建议自己，应该直接陈述观点）\n"
+        base_prompt += "3. 禁止使用'请求法庭'、'希望法庭考虑'等表达\n"
+        base_prompt += "审判员应该直接陈述观点，使用'本庭认为'、'法庭认为'、'根据...'、'综合...'等表达方式。\n\n"
     
     # 2. 添加案件背景
     if background:
@@ -1318,6 +1515,9 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     # 4.5. 添加长度限制要求（强调简洁性但完整表达）
     base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n\n"
     
+    # 4.6. 强调只关注最后一条消息（削弱历史消息干扰）
+    base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n\n"
+    
     # 5. 添加角色约束
     base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
     if agent_role == '审判员':
@@ -1330,10 +1530,10 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     return base_prompt
 
 
-def format_context_to_messages(context, max_messages=6, agent_role=None):
+def format_context_to_messages(context, max_messages=2, agent_role=None, simplify_history=True):
     """
     将训练数据格式的context（用\n分隔的对话）转换为消息格式
-    优化：限制消息数量以减少输入长度，加快生成速度
+    优化：限制消息数量以减少输入长度，加快生成速度，削弱历史消息干扰
     
     输入格式：
     "审判员: 现在开庭...\n公诉人: 根据起诉书...\n辩护人: 我方认为..."
@@ -1349,8 +1549,9 @@ def format_context_to_messages(context, max_messages=6, agent_role=None):
     
     Args:
         context: 对话历史文本
-        max_messages: 最大消息数量（默认6，只保留最近的对话）
+        max_messages: 最大消息数量（默认2，只保留最近的对话，削弱历史干扰）
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"），只有这个角色的发言标记为assistant，其他都是user
+        simplify_history: 是否简化历史消息（除了最后一条），默认True
     """
     if not context:
         return []
@@ -1360,7 +1561,7 @@ def format_context_to_messages(context, max_messages=6, agent_role=None):
     
     # 优化：只保留最近的消息，减少输入长度
     if len(lines) > max_messages:
-        logger.debug(f"[优化] 对话历史过长({len(lines)}条)，截断为最近{max_messages}条")
+        logger.debug(f"[优化] 对话历史过长({len(lines)}条)，截断为最近{max_messages}条以削弱历史干扰")
         lines = lines[-max_messages:]
     
     for i, line in enumerate(lines):
@@ -1389,6 +1590,17 @@ def format_context_to_messages(context, max_messages=6, agent_role=None):
             msg_role = 'assistant'
         else:
             msg_role = 'user'
+        
+        # 简化历史消息（除了最后一条），削弱历史干扰
+        # 最后一条消息保持完整，历史消息只保留关键信息
+        is_last_message = (i == len(lines) - 1)
+        if simplify_history and not is_last_message and len(content) > 100:
+            # 对于历史消息，如果内容过长，只保留开头和结尾的关键部分
+            # 保留前50字符和后50字符，中间用"..."省略
+            if len(content) > 200:
+                simplified_content = content[:50] + "...[历史消息已简化]..." + content[-50:]
+                logger.debug(f"[历史简化] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
+                content = simplified_content
         
         # 构建消息内容（统一使用中文冒号）
         if role_name:
@@ -1440,6 +1652,9 @@ def build_system_prompt(user_identity, current_role, judge_type, case_descriptio
     
     # 添加长度限制要求（强调简洁性但完整表达）
     base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n"
+    
+    # 强调只关注最后一条消息（削弱历史消息干扰）
+    base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n"
     
     # 为各角色添加特殊约束
     if current_role == 'judge':
