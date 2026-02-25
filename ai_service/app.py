@@ -1060,7 +1060,11 @@ def debate_generate_training_format(data):
     - context: 上下文（对话历史，用\n分隔，格式：角色名：内容）
     - role_to_reply: 要回复的角色（可选，默认与agent_role相同）
     - new_content: 新的内容（如审判员的提问，格式：角色名：内容）
-    - instruction: 角色指令（包含诉讼策略、审判员类型等）
+    - judge_type: 审判员类型（可选，用于构建系统提示词）
+    - user_identity: 用户身份（可选，plaintiff 或 defendant，用于确定策略）
+    - opponent_strategy: 对方AI律师的辩论策略（可选，aggressive/conservative/balanced/defensive）
+    - user_strategy: 用户自己的辩论策略（可选，aggressive/conservative/balanced/defensive）
+    - instruction: 角色指令（可选，向后兼容，如果提供则直接使用；否则根据业务参数构建）
     - reference_answer: 参考答案（训练时用，推理时不需要）
     """
     agent_role = data.get('agent_role')  # 当前AI扮演的角色
@@ -1068,8 +1072,14 @@ def debate_generate_training_format(data):
     context = data.get('context', '')  # 上下文（对话历史，用\n分隔）
     role_to_reply = data.get('role_to_reply', agent_role)  # 要回复的角色
     new_content = data.get('new_content', '')  # 新的内容（如审判员的提问）
-    instruction = data.get('instruction', '')  # 角色指令
     judge_skip_count = data.get('judge_skip_count', 0)  # 审判员跳过次数（从请求中获取）
+    
+    # 业务参数（用于构建系统提示词）
+    judge_type = data.get('judge_type')  # 审判员类型
+    user_identity = data.get('user_identity')  # 用户身份
+    opponent_strategy = data.get('opponent_strategy')  # 对方策略
+    user_strategy = data.get('user_strategy')  # 用户策略
+    instruction = data.get('instruction', '')  # 角色指令（向后兼容，如果提供则直接使用）
     
     if not agent_role:
         return jsonify({'error': 'agent_role参数不能为空'}), 400
@@ -1098,11 +1108,25 @@ def debate_generate_training_format(data):
         return jsonify({'error': '模型未加载'}), 500
     
     # 构建系统提示词（基于训练数据格式）
-    system_prompt = build_system_prompt_from_training_format(
-        agent_role=agent_role,
-        background=background,
-        instruction=instruction
-    )
+    # 如果提供了instruction（向后兼容），直接使用；否则根据业务参数构建
+    if instruction:
+        # 向后兼容：如果后端传递了完整的instruction，直接使用
+        system_prompt = build_system_prompt_from_training_format(
+            agent_role=agent_role,
+            background=background,
+            instruction=instruction
+        )
+    else:
+        # 新方案：根据业务参数统一构建系统提示词
+        system_prompt = build_system_prompt_from_training_format(
+            agent_role=agent_role,
+            background=background,
+            instruction=None,  # 不提供instruction
+            judge_type=judge_type,
+            user_identity=user_identity,
+            opponent_strategy=opponent_strategy,
+            user_strategy=user_strategy
+        )
     logger.info(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
     
     # 将context转换为消息格式（限制消息数量为最近6条）
@@ -1177,22 +1201,29 @@ def debate_generate_training_format(data):
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
     # 定义内部函数：执行一次生成
-    def generate_once(enhanced_prompt=None, max_tokens=None):
+    def generate_once(enhanced_prompt=False):
         """执行一次生成并返回清理后的回复
         
         Args:
-            enhanced_prompt: 可选的增强提示词，如果提供则使用此提示词替代原始system_prompt
-            max_tokens: 可选的最大token数，如果提供则使用此值替代默认的400
+            enhanced_prompt: 如果为True，在提示词中添加更强的约束（用于重试时）
         """
         import time
         gen_start_time = time.time()
         
-        # 使用增强提示词或原始提示词
-        current_system_prompt = enhanced_prompt if enhanced_prompt else system_prompt
-        current_max_tokens = max_tokens if max_tokens else 400
-        
         # 构建完整的原始输入消息列表（与模型实际接收的格式一致）
         full_messages = []
+        current_system_prompt = system_prompt
+        
+        # 如果是重试且是审判员，添加更强的约束
+        if enhanced_prompt and agent_role == '审判员':
+            # 在系统提示词前添加紧急约束
+            emergency_constraint = "\n【紧急约束 - 重试时强制遵守】\n"
+            emergency_constraint += "你刚才的输出只有\"辩论结束\"，这是错误的。你必须先生成完整的总结（至少200-300字），然后才能说\"辩论结束\"。\n"
+            emergency_constraint += "禁止直接输出\"辩论结束\"。禁止在总结之前输出\"辩论结束\"。\n"
+            emergency_constraint += "你的输出必须从总结开始，不能从\"辩论结束\"开始。\n"
+            emergency_constraint += "现在重新生成，必须包含完整的总结内容。\n\n"
+            current_system_prompt = emergency_constraint + (system_prompt or "")
+        
         if current_system_prompt:
             full_messages.append({"role": "system", "content": current_system_prompt})
         full_messages.extend(formatted_messages)
@@ -1202,7 +1233,7 @@ def debate_generate_training_format(data):
         logger.info("【AI调用 - debate_generate_training_format】最原始输入提示词")
         logger.info("=" * 80)
         logger.info(f"助手角色: {agent_role}")
-        logger.info(f"参数: max_new_tokens={current_max_tokens}, temperature=0.3, top_p=0.9")
+        logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
         logger.info(f"完整消息列表数量: {len(full_messages)}")
         logger.info("")
         logger.info("--- 完整原始输入消息列表（按顺序） ---")
@@ -1226,7 +1257,7 @@ def debate_generate_training_format(data):
         # 限制生成长度：允许生成足够内容，但通过后处理确保简洁
         response = model.chat(
             messages=formatted_messages,
-            max_new_tokens=current_max_tokens,  # 使用动态token数，重试时增加以确保有足够空间生成总结
+            max_new_tokens=400,  # 设置为400 tokens，确保内容完整，通过后处理控制长度
             temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
             top_p=0.9,
             system_prompt=current_system_prompt,
@@ -1236,6 +1267,17 @@ def debate_generate_training_format(data):
         elapsed_time = time.time() - gen_start_time
         tokens_per_sec = len(response) / 3 / elapsed_time if elapsed_time > 0 else 0  # 粗略估算
         logger.info(f"[性能] 生成耗时: {elapsed_time:.2f}秒, 回复长度: {len(response)}字符, 速度: {tokens_per_sec:.1f} tokens/秒")
+        
+        # 【调试】检查是否包含"辩论结束"且长度很短
+        if agent_role == '审判员' and '辩论结束' in response and len(response) < 50:
+            logger.warning(f"[调试] 检测到模型生成了很短的回复（{len(response)}字符），包含'辩论结束'")
+            logger.warning(f"[调试] 完整回复内容: {repr(response)}")
+            logger.warning(f"[调试] 生成耗时: {elapsed_time:.2f}秒，速度: {tokens_per_sec:.1f} tokens/秒")
+            logger.warning(f"[调试] 可能原因分析：")
+            logger.warning(f"[调试] 1. 模型在生成'辩论结束'后遇到了EOS token，导致提前停止")
+            logger.warning(f"[调试] 2. 模型认为'辩论结束'就是完整的输出（可能是训练时的模式）")
+            logger.warning(f"[调试] 3. 生成参数max_new_tokens=400应该足够，但实际只生成了{len(response)}字符")
+            logger.warning(f"[调试] 4. 需要检查infer.py中的生成逻辑，看是否在'辩论结束'后遇到了停止条件")
         
         logger.debug(f"[训练格式] 生成回复长度: {len(response)}")
         # 记录实际生成的回复内容（用于调试）
@@ -1265,13 +1307,17 @@ def debate_generate_training_format(data):
     cleaned_response = None
     retry_count = 0
     has_confusion = False
+    use_enhanced_prompt = False  # 标记是否使用增强提示词
     
     while retry_count <= max_retries:
         if retry_count > 0:
-            logger.warning(f"[角色混淆重试] 第{retry_count}次重试生成（角色: {agent_role}）")
+            if use_enhanced_prompt:
+                logger.warning(f"[结束语检查重试] 第{retry_count}次重试生成（角色: {agent_role}，使用增强提示词）")
+            else:
+                logger.warning(f"[角色混淆重试] 第{retry_count}次重试生成（角色: {agent_role}）")
         
-        # 生成回复
-        cleaned_response = generate_once()
+        # 生成回复（如果是重试且之前检测到结束语问题，使用增强提示词）
+        cleaned_response = generate_once(enhanced_prompt=use_enhanced_prompt)
         
         # 检查审判员的角色混淆和结束语格式
         if agent_role == '审判员':
@@ -1282,6 +1328,7 @@ def debate_generate_training_format(data):
                 if retry_count < max_retries:
                     logger.warning(f"[角色混淆重试] 检测到角色混淆，将进行第{retry_count + 1}次重试")
                     retry_count += 1
+                    use_enhanced_prompt = False  # 角色混淆重试不使用增强提示词
                     continue
                 else:
                     logger.error(f"[角色混淆重试] 重试{max_retries}次后仍检测到角色混淆，跳过此次发言")
@@ -1297,13 +1344,9 @@ def debate_generate_training_format(data):
                     })
             elif has_ending_without_summary:
                 if retry_count < max_retries:
-                    logger.warning(f"[结束语检查重试] 检测到只有\"辩论结束\"而没有总结，将进行第{retry_count + 1}次重试")
-                    # 在重试时动态增强提示词，添加更强烈的约束
-                    enhanced_prompt = system_prompt + "\n\n【紧急提醒】【必须严格遵守】如果你要宣布\"辩论结束\"，绝对禁止只输出\"辩论结束\"四个字。你必须先进行完整的总结（至少200-300字），包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。然后才能说\"辩论结束\"。如果你只输出\"辩论结束\"而不进行总结，系统将拒绝你的输出并强制重试。\n"
+                    logger.warning(f"[结束语检查重试] 检测到只有\"辩论结束\"而没有总结，将进行第{retry_count + 1}次重试（使用增强提示词）")
                     retry_count += 1
-                    # 使用增强提示词和更大的max_tokens重新生成（确保有足够空间生成总结）
-                    cleaned_response = generate_once(enhanced_prompt=enhanced_prompt, max_tokens=600)
-                    # 继续检查（重新进入循环检查新的cleaned_response）
+                    use_enhanced_prompt = True  # 结束语问题重试使用增强提示词
                     continue
                 else:
                     logger.error(f"[结束语检查重试] 重试{max_retries}次后仍检测到只有\"辩论结束\"而没有总结，使用硬编码结束语")
@@ -1633,14 +1676,20 @@ def debate_generate_legacy_format(data):
     })
 
 
-def build_system_prompt_from_training_format(agent_role, background, instruction):
+def build_system_prompt_from_training_format(agent_role, background, instruction=None, 
+                                            judge_type=None, user_identity=None, 
+                                            opponent_strategy=None, user_strategy=None):
     """
     根据训练数据格式构建系统提示词
     
     Args:
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
         background: 案件背景（前面保存的案件描述）
-        instruction: 角色指令（包含诉讼策略、审判员类型等）
+        instruction: 角色指令（可选，如果提供则直接使用，用于向后兼容）
+        judge_type: 审判员类型（可选，如"professional"、"strong"等）
+        user_identity: 用户身份（可选，"plaintiff" 或 "defendant"）
+        opponent_strategy: 对方AI律师的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
+        user_strategy: 用户自己的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
     """
     # 1. 明确角色身份
     role_definitions = {
@@ -1651,12 +1700,6 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     
     role_def = role_definitions.get(agent_role, f'{agent_role}')
     base_prompt = f"你是{agent_role}，只能以{agent_role}身份发言。\n{role_def}\n\n"
-    
-    # 对于审判员，在开头就强调结束语要求（最高优先级）
-    if agent_role == '审判员':
-        base_prompt += "【最高优先级】【绝对禁止违反】结束语格式要求：\n"
-        base_prompt += "如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结（至少200-300字），包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
-        base_prompt += "绝对禁止只输出\"辩论结束\"而不进行总结。正确的格式必须是：先总结（至少200-300字），然后再说\"辩论结束\"。\n\n"
     
     # 禁止模仿对话历史中其他角色的发言风格
     if agent_role == '辩护人':
@@ -1677,30 +1720,53 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     
     # 3. 添加角色指令
     if instruction:
+        # 向后兼容：如果提供了完整的instruction，直接使用
         base_prompt += f"指令：\n{instruction}\n\n"
     else:
-        default_instructions = {
-            '审判员': '中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断',
-            '公诉人': '行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节',
-            '辩护人': '维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻',
-            '公诉人': '行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节',
-            '辩护人': '维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻'
-        }
-        default_instruction = default_instructions.get(agent_role, '保持专业严谨')
-        base_prompt += f"指令：{default_instruction}\n\n"
+        # 新方案：根据业务参数构建角色指令
+        role_instruction = build_role_instruction(
+            agent_role=agent_role,
+            judge_type=judge_type,
+            user_identity=user_identity,
+            opponent_strategy=opponent_strategy,
+            user_strategy=user_strategy
+        )
+        if role_instruction:
+            base_prompt += f"指令：\n{role_instruction}\n\n"
     
     # 4. 添加通用要求
     base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n\n"
     
-    # 4.5. 添加长度限制要求（强调简洁性但完整表达）
+    # 4.5. 对于审判员，优先添加结束辩论的特殊要求（必须在简洁性要求之前）
+    if agent_role == '审判员':
+        # 【最高优先级】结束辩论的特殊要求（必须在所有其他要求之前，确保模型优先理解）
+        # 关键修改：避免在提示词中直接提到"辩论结束"，改用其他表达方式
+        base_prompt += "【最高优先级】【绝对禁止违反】当你决定结束庭审时，必须遵守以下规则：\n"
+        base_prompt += "1. 在结束庭审之前，你必须先进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
+        base_prompt += "2. 【绝对禁止】禁止直接结束庭审而不进行总结。禁止先结束再补充总结。\n"
+        base_prompt += "3. 正确的结束方式必须是：先进行完整总结（至少200-300字，必须包含上述四个要点），然后在总结的最后才宣布结束。\n"
+        base_prompt += "4. 总结部分不受任何简洁性要求限制，必须完整详细。总结时需要综合整个对话历史，不能只关注最后一条消息。\n"
+        base_prompt += "5. 【关键】输出格式要求：你的输出必须按照以下顺序：\n"
+        base_prompt += "   第一步：综合全案事实、证据及双方辩论意见，进行完整总结（至少200-300字，必须包含四个要点：总结双方辩论要点、归纳案件争议焦点、说明案件关键情节、表明法庭的态度和判断）\n"
+        base_prompt += "   第二步：在总结完成后，最后才宣布结束\n"
+        base_prompt += "   禁止跳过第一步直接宣布结束。禁止在总结之前宣布结束。\n"
+        base_prompt += "6. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能结束庭审。\n\n"
+    
+    # 4.6. 添加长度限制要求（强调简洁性但完整表达）
     # 注意：对于审判员宣布"辩论结束"的情况，必须进行完整总结（至少200-300字），不受此简洁性要求限制
-    base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n\n"
+    base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n"
+    if agent_role == '审判员':
+        base_prompt += "【例外】如果你要结束庭审，上述简洁性要求不适用，必须进行完整总结（至少200-300字）。\n"
+    base_prompt += "\n"
     
-    # 4.6. 强调只关注最后一条消息（削弱历史消息干扰）
+    # 4.7. 强调只关注最后一条消息（削弱历史消息干扰）
     # 注意：对于审判员宣布"辩论结束"的情况，需要综合整个对话历史进行总结，不受此原则限制
-    base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n\n"
+    base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n"
+    if agent_role == '审判员':
+        base_prompt += "【例外】如果你要结束庭审，上述原则不适用，必须综合整个对话历史进行完整总结。\n"
+    base_prompt += "\n"
     
-    # 4.7. 禁止元叙述和思考过程输出（关键约束）
+    # 4.8. 禁止元叙述和思考过程输出（关键约束）
     base_prompt += "【绝对禁止】输出要求：\n"
     base_prompt += "1. 绝对禁止输出任何思考过程、分析过程、计划、旁白、元叙述\n"
     base_prompt += "2. 绝对禁止输出任何方括号内的内容（如\"[审判员总结辩论]\"、\"[总结]\"等），这些是注释性内容，不应该出现在最终发言中\n"
@@ -1713,22 +1779,114 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
     if agent_role == '审判员':
         base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
         base_prompt += "\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。\n"
-        # 单独强调结束语要求，确保模型理解（这是最高优先级的要求）
-        base_prompt += "\n【最高优先级】【极其重要】结束辩论的时机和要求（必须严格遵守）：\n"
-        base_prompt += "1. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能宣布\"辩论结束\"。如果争议焦点尚未明确或双方仍在激烈辩论，应继续引导辩论，不要过早结束。\n"
-        base_prompt += "2. 结束格式（绝对禁止违反）：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
-        base_prompt += "   - 禁止只说\"辩论结束\"而不进行总结。\n"
-        base_prompt += "   - 禁止先宣布\"辩论结束\"再补充总结。\n"
-        base_prompt += "   - 正确的结束方式必须是：先进行完整总结（至少200-300字，必须包含上述四个要点），然后再说\"辩论结束\"。\n"
-        base_prompt += "   - 总结部分不受\"简洁性要求\"限制，必须完整详细。\n"
-        base_prompt += "   - 示例格式：\"[完整的总结内容，至少200-300字，包含四个要点] 辩论结束。\"\n"
-        base_prompt += "   - 禁止在结束前提到\"最后陈述\"等不存在的环节。\n"
     elif agent_role == '辩护人':
         base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     elif agent_role == '公诉人':
         base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止以审判员口吻发言（如\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"、\"请公诉人...\"等），必须直接以第一人称陈述公诉观点（如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
     
     return base_prompt
+
+
+def build_role_instruction(agent_role, judge_type=None, user_identity=None, 
+                           opponent_strategy=None, user_strategy=None):
+    """
+    根据业务参数构建角色指令
+    
+    Args:
+        agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
+        judge_type: 审判员类型（可选，如"professional"、"strong"等）
+        user_identity: 用户身份（可选，"plaintiff" 或 "defendant"）
+        opponent_strategy: 对方AI律师的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
+        user_strategy: 用户自己的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
+    
+    Returns:
+        角色指令字符串
+    """
+    instruction_parts = []
+    
+    if agent_role == '审判员':
+        # 审判员角色的instruction
+        if judge_type:
+            judge_type_descriptions = {
+                'professional': '专业型审判员：讲话简洁，业务熟练，判决果断。',
+                'strong': '强势型审判员：专业能力极度自信，不接受律师的反驳。',
+                'irritable': '暴躁型审判员：急躁易怒，控制力强，常拍桌训人。',
+                'lazy': '偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节。',
+                'wavering': '摇摆型审判员：优柔寡断，复杂案件时常左右摇摆。',
+                'partial': '偏袒型审判员：常替弱者说话，判决会考虑弱者利益。',
+                'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方。',
+                'partial-defendant': '偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方。'
+            }
+            description = judge_type_descriptions.get(judge_type, judge_type_descriptions['professional'])
+            instruction_parts.append(description)
+        
+        instruction_parts.append('审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。')
+        instruction_parts.append('约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括"现在开庭"、"进入最后陈述环节"、"现在进行法庭辩论"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用"请公诉人发言"或"请辩护人发言"格式，否则系统自动管理发言顺序；仅审判员/公诉人/辩护人可发言；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。')
+        # 注意：以下内容已在 build_system_prompt_from_training_format 中添加，这里不再重复：
+        # - "最后陈述环节"的禁止
+        # - 结束庭审的特殊要求
+    
+    elif agent_role == '公诉人':
+        instruction_parts.append('公诉人：行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节。')
+        strategy = get_strategy_for_role('plaintiff', user_identity, opponent_strategy, user_strategy)
+        if strategy:
+            instruction_parts.append(f'策略：{strategy}')
+    
+    elif agent_role == '辩护人':
+        instruction_parts.append('辩护人：维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻。')
+        strategy = get_strategy_for_role('defendant', user_identity, opponent_strategy, user_strategy)
+        if strategy:
+            instruction_parts.append(f'策略：{strategy}')
+    
+    else:
+        instruction_parts.append('保持专业严谨。')
+    
+    return '\n'.join(instruction_parts)
+
+
+def get_strategy_for_role(current_role, user_identity, opponent_strategy, user_strategy):
+    """
+    根据角色和用户身份获取策略描述
+    
+    Args:
+        current_role: 当前角色（"plaintiff" 或 "defendant"）
+        user_identity: 用户身份（"plaintiff" 或 "defendant"）
+        opponent_strategy: 对方AI律师的辩论策略
+        user_strategy: 用户自己的辩论策略
+    
+    Returns:
+        策略描述字符串
+    """
+    strategy_descriptions = {
+        'aggressive': '激进：强硬立场，积极进攻，不轻易让步，质疑对方证据，强调己方优势',
+        'conservative': '保守：优先调解，主张温和，可适当让步，避免激化矛盾',
+        'balanced': '均衡：主张适中，证据充分，不过度激化，保持协商空间',
+        'defensive': '防御：重点防守，回应质疑，保护核心利益，避免主动进攻'
+    }
+    
+    # 如果当前角色是用户自己，使用用户选择的策略
+    role_map = {
+        'plaintiff': '公诉人',
+        'defendant': '辩护人'
+    }
+    
+    # 判断当前角色是否对应用户身份
+    is_user_role = False
+    if current_role == 'plaintiff' and user_identity == 'plaintiff':
+        is_user_role = True
+    elif current_role == 'defendant' and user_identity == 'defendant':
+        is_user_role = True
+    
+    if is_user_role:
+        # 当前角色是用户自己，使用用户选择的策略
+        if user_strategy:
+            return strategy_descriptions.get(user_strategy.lower(), strategy_descriptions['balanced'])
+        return strategy_descriptions['balanced']
+    else:
+        # 当前角色是对手，使用用户选择的对方策略
+        if opponent_strategy:
+            return strategy_descriptions.get(opponent_strategy.lower(), strategy_descriptions['balanced'])
+        return strategy_descriptions['balanced']
 
 
 def format_context_to_messages(context, max_messages=2, agent_role=None, simplify_history=True):

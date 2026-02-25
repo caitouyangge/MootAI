@@ -140,9 +140,12 @@ public class AiService {
         String context = convertMessagesToContext(messages);
         requestBody.put("context", context);
         
-        // 4. 转换 instruction（角色指令，包含审判员类型、诉讼策略等）
-        String instruction = buildInstruction(currentRole, judgeType, userIdentity, opponentStrategy, userStrategy);
-        requestBody.put("instruction", instruction);
+        // 4. 传递业务参数，由AI服务统一构建系统提示词（方案1：单一职责）
+        // 不再构建完整的instruction，只传递业务参数
+        requestBody.put("judge_type", judgeType);
+        requestBody.put("user_identity", userIdentity);
+        requestBody.put("opponent_strategy", opponentStrategy);
+        requestBody.put("user_strategy", userStrategy);
         
         return requestBody;
     }
@@ -193,124 +196,8 @@ public class AiService {
         return context.toString();
     }
     
-    /**
-     * 构建instruction（角色指令）
-     * 包含审判员类型、诉讼策略等信息
-     * 对于审判员角色，审判员类型会加入角色提示词中
-     * 
-     * @param currentRole 当前角色（judge, plaintiff, defendant）
-     * @param judgeType 审判员类型
-     * @param userIdentity 用户身份（plaintiff 或 defendant）
-     * @param opponentStrategy 对方AI律师的辩论策略（aggressive, conservative, balanced, defensive）
-     * @param userStrategy 用户自己的辩论策略（aggressive, conservative, balanced, defensive）
-     */
-    private String buildInstruction(String currentRole, String judgeType, String userIdentity, String opponentStrategy, String userStrategy) {
-        StringBuilder instruction = new StringBuilder();
-        
-        if ("judge".equalsIgnoreCase(currentRole)) {
-            // 审判员角色的instruction
-            if (judgeType != null && !judgeType.isEmpty()) {
-                switch (judgeType) {
-                    case "professional":
-                        instruction.append("专业型审判员：讲话简洁，业务熟练，判决果断。");
-                        break;
-                    case "strong":
-                        instruction.append("强势型审判员：专业能力极度自信，不接受律师的反驳。");
-                        break;
-                    case "irritable":
-                        instruction.append("暴躁型审判员：急躁易怒，控制力强，常拍桌训人。");
-                        break;
-                    case "lazy":
-                        instruction.append("偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节。");
-                        break;
-                    case "wavering":
-                        instruction.append("摇摆型审判员：优柔寡断，复杂案件时常左右摇摆。");
-                        break;
-                    case "partial":
-                        instruction.append("偏袒型审判员：常替弱者说话，判决会考虑弱者利益。");
-                        break;
-                    case "partial-plaintiff":
-                        instruction.append("偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方。");
-                        break;
-                    case "partial-defendant":
-                        instruction.append("偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方。");
-                        break;
-                    default:
-                        instruction.append("专业型审判员：讲话简洁，业务熟练，判决果断。");
-                        break;
-                }
-                instruction.append("\n");
-            }
-            
-            instruction.append("审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。");
-            instruction.append("\n约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；仅审判员/公诉人/辩护人可发言；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。");
-            instruction.append("\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。如果辩论结束，直接宣布\"辩论结束\"即可，不要提到任何不存在的环节。");
-            instruction.append("\n【极其重要】结束辩论的时机和要求：");
-            instruction.append("\n1. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能宣布\"辩论结束\"。如果争议焦点尚未明确或双方仍在激烈辩论，应继续引导辩论，不要过早结束。");
-            instruction.append("\n2. 结束格式：如果你要宣布\"辩论结束\"，必须在此之前进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。禁止只说\"辩论结束\"而不进行总结。正确的结束方式应该是：先进行完整总结（至少200-300字），然后再说\"辩论结束\"。禁止在结束前提到\"最后陈述\"等不存在的环节。");
-        } else if ("plaintiff".equalsIgnoreCase(currentRole)) {
-            instruction.append("公诉人：行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节。");
-            String strategy = getStrategyForRole("plaintiff", userIdentity, opponentStrategy, userStrategy);
-            instruction.append("\n策略：").append(strategy);
-        } else if ("defendant".equalsIgnoreCase(currentRole)) {
-            instruction.append("辩护人：维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻。");
-            String strategy = getStrategyForRole("defendant", userIdentity, opponentStrategy, userStrategy);
-            instruction.append("\n策略：").append(strategy);
-        } else {
-            instruction.append("保持专业严谨。");
-        }
-        
-        return instruction.toString();
-    }
-    
-    /**
-     * 根据角色和用户身份获取策略
-     * 
-     * @param currentRole 当前角色（plaintiff 或 defendant）
-     * @param userIdentity 用户身份（plaintiff 或 defendant）
-     * @param opponentStrategy 对方AI律师的辩论策略
-     * @param userStrategy 用户自己的辩论策略
-     * @return 策略描述
-     */
-    private String getStrategyForRole(String currentRole, String userIdentity, String opponentStrategy, String userStrategy) {
-        // 如果当前角色是用户自己，使用用户选择的策略
-        if (currentRole.equalsIgnoreCase(userIdentity)) {
-            if (userStrategy != null && !userStrategy.isEmpty()) {
-                switch (userStrategy.toLowerCase()) {
-                    case "aggressive":
-                        return "激进：强硬立场，积极进攻，不轻易让步，质疑对方证据，强调己方优势";
-                    case "conservative":
-                        return "保守：优先调解，主张温和，可适当让步，避免激化矛盾";
-                    case "balanced":
-                        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-                    case "defensive":
-                        return "防御：重点防守，回应质疑，保护核心利益，避免主动进攻";
-                    default:
-                        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-                }
-            }
-            // 如果没有提供用户策略，使用默认均衡策略
-            return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-        }
-        
-        // 如果当前角色是对手，使用用户选择的对方策略
-        if (opponentStrategy != null && !opponentStrategy.isEmpty()) {
-            switch (opponentStrategy.toLowerCase()) {
-                case "aggressive":
-                    return "激进：强硬立场，积极进攻，不轻易让步，质疑对方证据，强调己方优势";
-                case "conservative":
-                    return "保守：优先调解，主张温和，可适当让步，避免激化矛盾";
-                case "balanced":
-                    return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-                case "defensive":
-                    return "防御：重点防守，回应质疑，保护核心利益，避免主动进攻";
-                default:
-                    return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-            }
-        }
-        
-        return "均衡：主张适中，证据充分，不过度激化，保持协商空间";
-    }
+    // 注意：buildInstruction 和 getStrategyForRole 方法已移除
+    // 现在由AI服务统一构建系统提示词，后端只传递业务参数
     
     /**
      * 检查AI服务健康状态
