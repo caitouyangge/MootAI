@@ -86,3 +86,6 @@ site/
 .npm
 .eslintcache
 .stylelintcache
+
+# 模型文件
+huggingface_models/

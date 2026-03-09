@@ -1129,8 +1129,12 @@ def debate_generate_training_format(data):
         )
     logger.info(f"[训练格式] 系统提示词长度: {len(system_prompt)}")
     
-    # 将context转换为消息格式（限制消息数量为最近6条）
-    formatted_messages = format_context_to_messages(context, max_messages=6, agent_role=agent_role)
+    # 将context转换为消息格式（限制消息数量为最近4条，减少上下文长度，提高模型对最新内容的注意力）
+    # 减少历史消息数量可以：
+    # 1. 降低上下文长度，提高模型处理效率
+    # 2. 减少历史干扰，让模型更关注最新消息
+    # 3. 降低重复历史内容的可能性
+    formatted_messages = format_context_to_messages(context, max_messages=4, agent_role=agent_role)
     logger.info(f"[训练格式] 格式化后的消息数量: {len(formatted_messages)}")
     
     # 如果有new_content，将其添加到消息历史中（这是训练数据格式的关键）
@@ -1160,10 +1164,11 @@ def debate_generate_training_format(data):
             new_content_with_role = f"{role_to_reply}：{new_content_stripped}"
         
         # 将new_content作为最后一条消息添加到历史中
-        # 根据前一条消息的角色决定当前消息的角色（交替user/assistant）
-        if formatted_messages:
-            prev_role = formatted_messages[-1].get('role', 'user')
-            new_msg_role = 'assistant' if prev_role == 'user' else 'user'
+        # 根据文档要求：当前角色自己的发言 -> assistant，其他角色的发言 -> user
+        # new_content通常是需要回复的内容，所以应该是其他角色的发言，标记为user
+        # 但如果role_to_reply等于agent_role，说明是当前角色自己的发言，标记为assistant
+        if role_to_reply == agent_role:
+            new_msg_role = 'assistant'
         else:
             new_msg_role = 'user'
         
@@ -1233,33 +1238,37 @@ def debate_generate_training_format(data):
         logger.info("【AI调用 - debate_generate_training_format】最原始输入提示词")
         logger.info("=" * 80)
         logger.info(f"助手角色: {agent_role}")
-        logger.info(f"参数: max_new_tokens=400, temperature=0.3, top_p=0.9")
+        logger.info(f"参数: max_new_tokens=400, temperature=0.65, top_p=0.95")
         logger.info(f"完整消息列表数量: {len(full_messages)}")
+        logger.info("")
+        logger.info("--- 系统提示词（完整） ---")
+        logger.info(current_system_prompt)
+        logger.info("--- 系统提示词结束 ---")
         logger.info("")
         logger.info("--- 完整原始输入消息列表（按顺序） ---")
         for i, msg in enumerate(full_messages):
             role = msg.get('role', '')
             content = msg.get('content', '')
-            content_preview = content[:200] + "..." if len(content) > 200 else content
-            logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
-            logger.info(f"  内容预览: {content_preview}")
-            if len(content) > 200:
-                logger.info(f"  完整内容: {content}")
+            # 对于system消息，只显示长度和预览，不重复输出完整内容（已在上面单独输出）
+            if role == 'system':
+                logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符（完整内容已在上方单独显示）")
+            else:
+                content_preview = content[:200] + "..." if len(content) > 200 else content
+                logger.info(f"消息[{i}]: role='{role}', content长度={len(content)}字符")
+                logger.info(f"  内容预览: {content_preview}")
+                if len(content) > 200:
+                    logger.info(f"  完整内容: {content}")
         logger.info("--- 原始输入消息列表结束 ---")
-        logger.info("")
-        logger.info("--- 系统提示词（完整） ---")
-        logger.info(current_system_prompt)
-        logger.info("--- 系统提示词结束 ---")
         logger.info("=" * 80)
         
-        # 使用适中的temperature以获得更好的生成质量（0.3-0.5之间平衡速度和创造性）
-        # 如果temperature=0.0可能导致生成过于保守和简短
+        # 提高temperature以增加创造性，避免重复上下文内容
+        # temperature=0.6-0.7可以增加多样性，减少重复
         # 限制生成长度：允许生成足够内容，但通过后处理确保简洁
         response = model.chat(
             messages=formatted_messages,
             max_new_tokens=400,  # 设置为400 tokens，确保内容完整，通过后处理控制长度
-            temperature=0.3,  # 优化：使用适中的temperature，平衡速度和生成质量
-            top_p=0.9,
+            temperature=0.65,  # 提高温度以增加创造性，减少重复上下文内容（从0.3提高到0.65）
+            top_p=0.95,  # 提高top_p以增加多样性（从0.9提高到0.95）
             system_prompt=current_system_prompt,
             assistant_role=agent_role
         )
@@ -1680,7 +1689,7 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
                                             judge_type=None, user_identity=None, 
                                             opponent_strategy=None, user_strategy=None):
     """
-    根据训练数据格式构建系统提示词
+    根据实际应用提示词格式样例构建系统提示词（严格按照文档格式）
     
     Args:
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
@@ -1691,39 +1700,47 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
         opponent_strategy: 对方AI律师的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
         user_strategy: 用户自己的辩论策略（可选，"aggressive"/"conservative"/"balanced"/"defensive"）
     """
-    # 1. 明确角色身份
+    system_parts = []
+    
+    # 1. 角色身份定义
+    system_parts.append(f"你是{agent_role}，只能以{agent_role}身份发言。")
+    
+    # 角色职责说明
     role_definitions = {
         '审判员': '审判员：主持庭审，引导辩论，确保程序公正',
-        '公诉人': '公诉人：代表国家行使公诉权，指控犯罪事实，出示并质证证据',
-        '辩护人': '辩护人：维护辩护人合法权益，针对指控提出辩护意见和反驳'
+        '公诉人': '公诉人：代表国家行使公诉权，指控犯罪事实',
+        '辩护人': '辩护人：维护被告人合法权益，提出辩护意见'
     }
-    
     role_def = role_definitions.get(agent_role, f'{agent_role}')
-    base_prompt = f"你是{agent_role}，只能以{agent_role}身份发言。\n{role_def}\n\n"
+    system_parts.append(role_def)
     
-    # 禁止模仿对话历史中其他角色的发言风格
-    if agent_role == '辩护人':
-        base_prompt += "重要：对话历史中可能包含审判员、公诉人的发言，但你必须以辩护人身份直接陈述观点，禁止模仿审判员的提问方式（如\"辩护人，对于...你方如何回应?\"、\"请辩护人...\"等），禁止以第三人称称呼自己，禁止生成任何审判员式的发言。你必须直接以第一人称陈述辩护观点，例如\"我方认为...\"、\"根据...\"等。\n\n"
+    # 2. 禁止模仿其他角色发言风格
+    if agent_role == '审判员':
+        system_parts.append("\n重要：对话历史中可能包含公诉人、辩护人的发言，但你必须以审判员身份发言，禁止模仿其他角色的发言风格。")
     elif agent_role == '公诉人':
-        base_prompt += "【极其重要】对话历史中可能包含审判员的发言（如\"请公诉人发表公诉意见\"等），但你必须以公诉人身份直接陈述观点，绝对禁止模仿审判员的发言风格。禁止生成任何审判员式的发言，包括但不限于：\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"等阶段转换语。禁止以第三人称称呼自己，禁止以审判员口吻发言。你必须直接以第一人称陈述公诉观点，例如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等。\n\n"
-    elif agent_role == '审判员':
-        base_prompt += "重要：对话历史中可能包含公诉人、辩护人的发言，但你必须以审判员身份发言，禁止模仿其他角色的发言风格。\n\n"
-        base_prompt += "【极其重要】绝对禁止使用以下表达方式：\n"
-        base_prompt += "1. 禁止使用'我方认为'、'我方认为...'等第一人称表达（这是公诉人或辩护人的口吻，审判员应该使用'本庭认为'、'法庭认为'）\n"
-        base_prompt += "2. 禁止使用'建议法庭'、'恳请法庭'、'希望法庭'等表达（审判员就是法庭，不应该建议自己，应该直接陈述观点）\n"
-        base_prompt += "3. 禁止使用'请求法庭'、'希望法庭考虑'等表达\n"
-        base_prompt += "审判员应该直接陈述观点，使用'本庭认为'、'法庭认为'、'根据...'、'综合...'等表达方式。\n\n"
+        system_parts.append("\n重要：对话历史中可能包含审判员、辩护人的发言，但你必须以公诉人身份发言，禁止模仿其他角色的发言风格。")
+    elif agent_role == '辩护人':
+        system_parts.append("\n重要：对话历史中可能包含审判员、公诉人的发言，但你必须以辩护人身份发言，禁止模仿其他角色的发言风格。")
     
-    # 2. 添加案件背景
+    # 3. 案件背景
     if background:
-        base_prompt += f"案件背景：\n{background}\n\n"
+        system_parts.append(f"\n案件背景：\n{background}")
     
-    # 3. 添加角色指令
+    # 4. 指令部分
+    system_parts.append("\n\n指令：")
     if instruction:
         # 向后兼容：如果提供了完整的instruction，直接使用
-        base_prompt += f"指令：\n{instruction}\n\n"
+        # 过滤掉重复的角色说明
+        instruction_lines = instruction.split('\n')
+        filtered_instruction = []
+        for line in instruction_lines:
+            if f"作为{agent_role}" in line or f"你当前扮演的角色" in line:
+                continue
+            filtered_instruction.append(line)
+        if filtered_instruction:
+            system_parts.append('\n'.join(filtered_instruction))
     else:
-        # 新方案：根据业务参数构建角色指令
+        # 根据业务参数构建角色指令
         role_instruction = build_role_instruction(
             agent_role=agent_role,
             judge_type=judge_type,
@@ -1732,65 +1749,46 @@ def build_system_prompt_from_training_format(agent_role, background, instruction
             user_strategy=user_strategy
         )
         if role_instruction:
-            base_prompt += f"指令：\n{role_instruction}\n\n"
+            system_parts.append(role_instruction)
     
-    # 4. 添加通用要求
-    base_prompt += "要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。\n\n"
+    # 5. 约束条件
+    system_parts.append("\n约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。")
     
-    # 4.5. 对于审判员，优先添加结束辩论的特殊要求（必须在简洁性要求之前）
+    # 通用约束：禁止输出与上下文一致的内容
+    system_parts.append("【绝对禁止】禁止输出与对话历史中已经出现过的内容一致或高度相似的内容。你的每次发言必须包含新的观点、新的角度或新的论证，不能简单重复或复述上下文中的内容。")
+    
     if agent_role == '审判员':
-        # 【最高优先级】结束辩论的特殊要求（必须在所有其他要求之前，确保模型优先理解）
-        # 关键修改：避免在提示词中直接提到"辩论结束"，改用其他表达方式
-        base_prompt += "【最高优先级】【绝对禁止违反】当你决定结束庭审时，必须遵守以下规则：\n"
-        base_prompt += "1. 在结束庭审之前，你必须先进行完整的总结，包括：①总结双方辩论要点；②归纳案件争议焦点；③说明案件关键情节；④表明法庭的态度和判断。\n"
-        base_prompt += "2. 【绝对禁止】禁止直接结束庭审而不进行总结。禁止先结束再补充总结。\n"
-        base_prompt += "3. 正确的结束方式必须是：先进行完整总结（至少200-300字，必须包含上述四个要点），然后在总结的最后才宣布结束。\n"
-        base_prompt += "4. 总结部分不受任何简洁性要求限制，必须完整详细。总结时需要综合整个对话历史，不能只关注最后一条消息。\n"
-        base_prompt += "5. 【关键】输出格式要求：你的输出必须按照以下顺序：\n"
-        base_prompt += "   第一步：综合全案事实、证据及双方辩论意见，进行完整总结（至少200-300字，必须包含四个要点：总结双方辩论要点、归纳案件争议焦点、说明案件关键情节、表明法庭的态度和判断）\n"
-        base_prompt += "   第二步：在总结完成后，最后才宣布结束\n"
-        base_prompt += "   禁止跳过第一步直接宣布结束。禁止在总结之前宣布结束。\n"
-        base_prompt += "6. 结束时机：只有当案件争议焦点已经讨论清楚，双方观点已经充分表达，没有新的实质性争议时，才能结束庭审。\n\n"
-    
-    # 4.6. 添加长度限制要求（强调简洁性但完整表达）
-    # 注意：对于审判员宣布"辩论结束"的情况，必须进行完整总结（至少200-300字），不受此简洁性要求限制
-    base_prompt += "重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。\n"
-    if agent_role == '审判员':
-        base_prompt += "【例外】如果你要结束庭审，上述简洁性要求不适用，必须进行完整总结（至少200-300字）。\n"
-    base_prompt += "\n"
-    
-    # 4.7. 强调只关注最后一条消息（削弱历史消息干扰）
-    # 注意：对于审判员宣布"辩论结束"的情况，需要综合整个对话历史进行总结，不受此原则限制
-    base_prompt += "【极其重要】上下文处理原则：对话历史中的消息仅用于了解背景，你的回复应该主要基于最后一条消息。历史消息只是参考，不要被历史消息的内容和风格过度影响。专注于最后一条消息的要求和内容，直接针对最后一条消息进行回复。\n"
-    if agent_role == '审判员':
-        base_prompt += "【例外】如果你要结束庭审，上述原则不适用，必须综合整个对话历史进行完整总结。\n"
-    base_prompt += "\n"
-    
-    # 4.8. 禁止元叙述和思考过程输出（关键约束）
-    base_prompt += "【绝对禁止】输出要求：\n"
-    base_prompt += "1. 绝对禁止输出任何思考过程、分析过程、计划、旁白、元叙述\n"
-    base_prompt += "2. 绝对禁止输出任何方括号内的内容（如\"[审判员总结辩论]\"、\"[总结]\"等），这些是注释性内容，不应该出现在最终发言中\n"
-    base_prompt += "3. 绝对禁止输出任何角色名称和冒号（如\"公诉人：\"、\"辩护人：\"、\"审判员：\"），系统会自动添加\n"
-    base_prompt += "4. 只输出最终发言内容，直接进入陈述或反驳，不要有任何前置说明或注释\n"
-    base_prompt += "5. 如果输出中包含方括号、思考过程或元叙述，系统会自动过滤，请确保只输出纯发言内容\n\n"
-    
-    # 5. 添加角色约束
-    base_prompt += "约束：仅审判员/公诉人/辩护人可发言；背景中的实体名称不是法庭角色。\n"
-    if agent_role == '审判员':
-        base_prompt += "审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。\n"
-        base_prompt += "\n【绝对禁止】系统不存在\"最后陈述环节\"，禁止提到\"最后陈述\"、\"进入最后陈述环节\"、\"发表最后陈述\"等任何与最后陈述相关的内容。\n"
-    elif agent_role == '辩护人':
-        base_prompt += "辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言（如补充公诉人的编号列表、论点等）；必须明确表达与公诉人相反或对立的立场；绝对禁止以审判员口吻发言（如\"辩护人，对于...你方如何回应?\"、\"请辩护人就...发表意见\"等），必须直接以第一人称陈述辩护观点（如\"我方认为...\"、\"根据证据...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
+        system_parts.append("审判员特殊约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括\"现在开庭\"、\"进入最后陈述环节\"、\"现在进行法庭辩论\"、\"辩论结束\"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用\"请公诉人发言\"或\"请辩护人发言\"格式，否则系统自动管理发言顺序；结束语需完整（总结辩论、归纳焦点、说明情节、表明态度）；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。")
     elif agent_role == '公诉人':
-        base_prompt += "公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言（如补充辩护人的编号列表、论点等）；必须明确表达与辩护人相反或对立的立场；绝对禁止以审判员口吻发言（如\"现在进入辩论环节\"、\"首先由公诉人发表公诉意见\"、\"现在进行法庭辩论\"、\"请公诉人...\"等），必须直接以第一人称陈述公诉观点（如\"我方认为...\"、\"根据起诉书...\"、\"针对辩护意见...\"等）；绝对禁止输出任何方括号内容、思考过程或元叙述（如\"[审判员总结辩论]\"、\"[总结]\"等）；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。\n"
+        system_parts.append("公诉人特殊约束：必须反驳辩护人的观点和辩护；禁止补充或延续辩护人的发言内容；禁止帮助辩护人完成未完成的发言；必须明确表达与辩护人相反或对立的立场；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。")
+    elif agent_role == '辩护人':
+        system_parts.append("辩护人特殊约束：必须反驳公诉人的观点和指控；禁止补充或延续公诉人的发言内容；禁止帮助公诉人完成未完成的发言；必须明确表达与公诉人相反或对立的立场；绝对禁止重复之前已经说过的内容，每次发言必须提出新的观点或从不同角度论证。")
     
-    return base_prompt
+    # 6. 要求
+    system_parts.append("\n要求：理解对话阶段与焦点；切换角色语言风格；遵循程序规范；基于事实与法条辩论。")
+    
+    # 7. 重要提示（简洁性要求和内容唯一性要求）
+    system_parts.append("\n重要：发言要简洁明了，直接说重点，避免废话和冗长描述。在完整表达意思的前提下，尽量控制在300字左右。不要为了凑字数而重复表述，也不要因为追求简洁而遗漏关键信息。")
+    system_parts.append("【极其重要】禁止输出与对话历史中任何内容一致或高度相似的内容。每次发言必须包含新的信息、新的观点或新的论证角度，不能简单重复上下文中的内容。如果发现你的回复与对话历史中的内容高度相似，必须重新组织语言或提出不同的观点。")
+    system_parts.append("【关键】你的回复应该主要针对最后一条消息（需要回复的内容），而不是重复之前已经说过的内容。对话历史仅用于了解背景和上下文，你的任务是针对最新消息提出新的观点或从不同角度进行论证。")
+    system_parts.append("【绝对禁止】禁止重复或复述你自己在对话历史中已经说过的内容（assistant消息）。即使你之前的发言是正确的，也不能简单重复。你必须针对最新消息提出新的观点、新的论证角度或新的证据，不能只是换一种说法重复之前的内容。如果审判员要求你回应某个问题，你必须从新的角度或提出新的论据，而不是重复之前的发言。")
+    
+    # 8. 角色标识
+    system_parts.append(f"\n角色：{agent_role}。")
+    
+    # 9. 输出要求
+    system_parts.append(f"输出要求：仅输出最终发言，禁止思考/计划/元叙述/自述。直接陈述，以\"{agent_role}：\"开头。格式：<final>{agent_role}：发言内容</final>")
+    
+    # 组合所有部分
+    system_content = "\n".join(system_parts)
+    
+    return system_content
 
 
 def build_role_instruction(agent_role, judge_type=None, user_identity=None, 
                            opponent_strategy=None, user_strategy=None):
     """
-    根据业务参数构建角色指令
+    根据业务参数构建角色指令（严格按照文档格式）
     
     Args:
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"等）
@@ -1805,38 +1803,43 @@ def build_role_instruction(agent_role, judge_type=None, user_identity=None,
     instruction_parts = []
     
     if agent_role == '审判员':
-        # 审判员角色的instruction
-        if judge_type:
-            judge_type_descriptions = {
-                'professional': '专业型审判员：讲话简洁，业务熟练，判决果断。',
-                'strong': '强势型审判员：专业能力极度自信，不接受律师的反驳。',
-                'irritable': '暴躁型审判员：急躁易怒，控制力强，常拍桌训人。',
-                'lazy': '偷懒型审判员：粗略听案，嫌当事人啰嗦，不重视细节。',
-                'wavering': '摇摆型审判员：优柔寡断，复杂案件时常左右摇摆。',
-                'partial': '偏袒型审判员：常替弱者说话，判决会考虑弱者利益。',
-                'partial-plaintiff': '偏袒型审判员：习惯对公诉人宽容，倾向于支持公诉方。',
-                'partial-defendant': '偏袒型审判员：习惯对辩护人宽容，倾向于支持辩护方。'
-            }
-            description = judge_type_descriptions.get(judge_type, judge_type_descriptions['professional'])
-            instruction_parts.append(description)
+        # 审判员角色的instruction（严格按照文档格式）
+        instruction_parts.append('作为审判员，你需要：')
+        instruction_parts.append('1. 保持中立、客观、公正的立场')
+        instruction_parts.append('2. 引导庭审程序有序进行，控制庭审节奏')
+        instruction_parts.append('3. 对争议焦点进行归纳和总结')
+        instruction_parts.append('4. 确保各方充分表达意见，维护庭审秩序')
+        instruction_parts.append('5. 基于事实和法律进行判断，不偏不倚')
         
-        instruction_parts.append('审判员职责：中立公正；引导程序；归纳焦点；维护秩序；基于事实与法律判断。')
-        instruction_parts.append('约束：禁止自指发言；对话历史非空时禁止所有阶段转换语（包括"现在开庭"、"进入最后陈述环节"、"现在进行法庭辩论"等）；庭审全程处于法庭辩论阶段，直到你宣布结束；如需指定发言人，必须使用"请公诉人发言"或"请辩护人发言"格式，否则系统自动管理发言顺序；仅审判员/公诉人/辩护人可发言；绝对禁止重复之前已经说过的内容，每次发言必须有不同的内容或角度。')
-        # 注意：以下内容已在 build_system_prompt_from_training_format 中添加，这里不再重复：
-        # - "最后陈述环节"的禁止
-        # - 结束庭审的特殊要求
+        # 如果有审判员类型，可以添加类型描述（但不在指令部分，已在系统提示词中处理）
     
     elif agent_role == '公诉人':
-        instruction_parts.append('公诉人：行使公诉权；指控犯罪；举证质证；回应辩方；强调构成要件与量刑情节。')
+        # 公诉人角色的instruction（严格按照文档格式）
+        instruction_parts.append('作为公诉人，你需要：')
+        instruction_parts.append('1. 代表国家行使公诉权，指控犯罪事实')
+        instruction_parts.append('2. 出示并质证证据，证明犯罪构成要件')
+        instruction_parts.append('3. 回应辩方意见，维护指控的合法性')
+        instruction_parts.append('4. 围绕争议焦点组织举证质证')
+        instruction_parts.append('5. 强调主客观要件与因果关系，突出量刑情节')
+        
+        # 如果有策略，可以添加策略描述
         strategy = get_strategy_for_role('plaintiff', user_identity, opponent_strategy, user_strategy)
         if strategy:
-            instruction_parts.append(f'策略：{strategy}')
+            instruction_parts.append(f'\n策略：{strategy}')
     
     elif agent_role == '辩护人':
-        instruction_parts.append('辩护人：维护辩护人权益；提出辩护意见；提供有利证据；质疑控方证据；争取从轻减轻。')
+        # 辩护人角色的instruction（严格按照文档格式）
+        instruction_parts.append('作为辩护人，你需要：')
+        instruction_parts.append('1. 维护被告人的合法权益')
+        instruction_parts.append('2. 针对指控提出辩护意见和反驳')
+        instruction_parts.append('3. 提出有利于被告人的证据和事实')
+        instruction_parts.append('4. 质疑控方证据的合法性、真实性、关联性')
+        instruction_parts.append('5. 为被告人争取从轻、减轻或免除处罚')
+        
+        # 如果有策略，可以添加策略描述
         strategy = get_strategy_for_role('defendant', user_identity, opponent_strategy, user_strategy)
         if strategy:
-            instruction_parts.append(f'策略：{strategy}')
+            instruction_parts.append(f'\n策略：{strategy}')
     
     else:
         instruction_parts.append('保持专业严谨。')
@@ -1953,13 +1956,20 @@ def format_context_to_messages(context, max_messages=2, agent_role=None, simplif
         # 简化历史消息（除了最后一条），削弱历史干扰
         # 最后一条消息保持完整，历史消息只保留关键信息
         is_last_message = (i == len(lines) - 1)
-        if simplify_history and not is_last_message and len(content) > 100:
-            # 对于历史消息，如果内容过长，只保留开头和结尾的关键部分
-            # 保留前50字符和后50字符，中间用"..."省略
-            if len(content) > 200:
-                simplified_content = content[:50] + "...[历史消息已简化]..." + content[-50:]
-                logger.debug(f"[历史简化] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
+        if simplify_history and not is_last_message and len(content) > 80:
+            # 对于assistant消息（自己之前的发言），更激进地简化，避免模型重复自己的内容
+            if msg_role == 'assistant':
+                # assistant消息：只要超过80字符就简化，且只保留更少内容（30字符）
+                # 这样可以大幅减少模型看到自己之前完整发言的机会，降低重复概率
+                simplified_content = content[:30] + "...[已简化]..." + content[-30:]
+                logger.debug(f"[历史简化-ASSISTANT] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
                 content = simplified_content
+            else:
+                # user消息：按原逻辑简化（150字符阈值，保留40字符）
+                if len(content) > 150:
+                    simplified_content = content[:40] + "...[已简化]..." + content[-40:]
+                    logger.debug(f"[历史简化] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
+                    content = simplified_content
         
         # 构建消息内容（统一使用中文冒号）
         if role_name:
