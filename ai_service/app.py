@@ -1206,11 +1206,12 @@ def debate_generate_training_format(data):
     logger.info(f"[性能] 输入估算: {estimated_input_tokens} tokens, {total_input_chars} 字符")
     
     # 定义内部函数：执行一次生成
-    def generate_once(enhanced_prompt=False):
+    def generate_once(enhanced_prompt=False, identity_enhanced_prompt=False):
         """执行一次生成并返回清理后的回复
         
         Args:
             enhanced_prompt: 如果为True，在提示词中添加更强的约束（用于重试时）
+            identity_enhanced_prompt: 如果为True，在提示词中添加审判员身份约束（用于角色混淆重试时）
         """
         import time
         gen_start_time = time.time()
@@ -1228,6 +1229,12 @@ def debate_generate_training_format(data):
             emergency_constraint += "你的输出必须从总结开始，不能从\"辩论结束\"开始。\n"
             emergency_constraint += "现在重新生成，必须包含完整的总结内容。\n\n"
             current_system_prompt = emergency_constraint + (system_prompt or "")
+        
+        # 如果是角色混淆重试且是审判员，添加身份增强约束
+        if identity_enhanced_prompt and agent_role == '审判员':
+            identity_constraint = "\n【紧急约束 - 角色身份】\n"
+            identity_constraint += "必须且仅以审判员身份发言；禁止使用「我方认为」「恳请法庭」等公诉人/辩护人用语；禁止以「公诉人：」「辩护人：」开头。\n\n"
+            current_system_prompt = identity_constraint + (current_system_prompt or "")
         
         if current_system_prompt:
             full_messages.append({"role": "system", "content": current_system_prompt})
@@ -1317,16 +1324,19 @@ def debate_generate_training_format(data):
     retry_count = 0
     has_confusion = False
     use_enhanced_prompt = False  # 标记是否使用增强提示词
+    use_identity_enhanced_prompt = False  # 标记是否使用身份增强提示词（角色混淆重试时）
     
     while retry_count <= max_retries:
         if retry_count > 0:
             if use_enhanced_prompt:
                 logger.warning(f"[结束语检查重试] 第{retry_count}次重试生成（角色: {agent_role}，使用增强提示词）")
+            elif use_identity_enhanced_prompt:
+                logger.warning(f"[角色混淆重试] 第{retry_count}次重试生成（角色: {agent_role}，使用身份增强提示词）")
             else:
                 logger.warning(f"[角色混淆重试] 第{retry_count}次重试生成（角色: {agent_role}）")
         
-        # 生成回复（如果是重试且之前检测到结束语问题，使用增强提示词）
-        cleaned_response = generate_once(enhanced_prompt=use_enhanced_prompt)
+        # 生成回复（如果是重试且之前检测到结束语问题，使用增强提示词；若是角色混淆重试，使用身份增强提示词）
+        cleaned_response = generate_once(enhanced_prompt=use_enhanced_prompt, identity_enhanced_prompt=use_identity_enhanced_prompt)
         
         # 检查审判员的角色混淆和结束语格式
         if agent_role == '审判员':
@@ -1338,6 +1348,7 @@ def debate_generate_training_format(data):
                     logger.warning(f"[角色混淆重试] 检测到角色混淆，将进行第{retry_count + 1}次重试")
                     retry_count += 1
                     use_enhanced_prompt = False  # 角色混淆重试不使用增强提示词
+                    use_identity_enhanced_prompt = True  # 角色混淆重试使用身份增强提示词
                     continue
                 else:
                     logger.error(f"[角色混淆重试] 重试{max_retries}次后仍检测到角色混淆，跳过此次发言")
@@ -1356,6 +1367,7 @@ def debate_generate_training_format(data):
                     logger.warning(f"[结束语检查重试] 检测到只有\"辩论结束\"而没有总结，将进行第{retry_count + 1}次重试（使用增强提示词）")
                     retry_count += 1
                     use_enhanced_prompt = True  # 结束语问题重试使用增强提示词
+                    use_identity_enhanced_prompt = False  # 结束语重试不使用身份增强提示词
                     continue
                 else:
                     logger.error(f"[结束语检查重试] 重试{max_retries}次后仍检测到只有\"辩论结束\"而没有总结，使用硬编码结束语")
