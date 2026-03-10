@@ -40,7 +40,7 @@
 
     <!-- 主要内容：产品卡片 + 功能亮点 -->
     <div class="content-wrapper">
-      <div class="welcome-card fade-in">
+      <div class="welcome-card card-hover fade-in">
         <div class="welcome-icon-svg" aria-hidden="true">
           <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M32 8L12 20v24l20 12 20-12V20L32 8z" stroke="var(--primary-purple)" stroke-width="2" stroke-linejoin="round" fill="var(--primary-purple-lightest)"/>
@@ -93,7 +93,7 @@
 
         <button
           type="button"
-          class="start-button"
+          class="start-button cta-hover"
           @click="goToCourtroom"
         >
           <span class="button-icon-svg" aria-hidden="true">
@@ -259,7 +259,7 @@ const goToCourtroom = () => {
   padding: 48px 24px 32px;
 }
 
-/* 产品卡片：玻璃态 + 细边框 + 大圆角 */
+/* 产品卡片：玻璃态 + 卡片悬浮阴影 + 统一 hover */
 .welcome-card {
   --card-radius: 24px;
   background: rgba(255, 255, 255, 0.72);
@@ -269,7 +269,13 @@ const goToCourtroom = () => {
   border-radius: var(--card-radius);
   padding: 56px 40px 48px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
+}
+
+.welcome-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .welcome-icon-svg {
@@ -354,7 +360,7 @@ const goToCourtroom = () => {
   border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
 .start-button:hover {

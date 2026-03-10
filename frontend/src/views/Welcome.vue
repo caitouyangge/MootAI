@@ -35,7 +35,7 @@
       
       <!-- 主 CTA -->
       <div class="cta-section">
-        <button type="button" class="cta-primary" @click.stop="showLogin">
+        <button type="button" class="cta-primary cta-hover" @click.stop="showLogin">
           登录 / 注册
         </button>
         <p class="cta-hint">点击上方按钮进入 MootAI</p>
@@ -344,7 +344,7 @@ const getParticleStyle = (index) => {
   border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
 .cta-primary:hover {

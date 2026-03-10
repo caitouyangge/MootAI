@@ -148,8 +148,8 @@ onMounted(() => {
 .navbar-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 16px;
-  height: 40px;
+  padding: 0 20px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -160,20 +160,22 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   user-select: none;
+  font-family: var(--font-heading);
 }
 
 .logo-icon {
-  font-size: 18px;
+  font-size: 22px;
   animation: float 3s ease-in-out infinite;
 }
 
 .logo-text {
-  font-size: 14px;
-  font-weight: bold;
+  font-size: 17px;
+  font-weight: 700;
   background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: 0.02em;
 }
 
 .navbar-menu {
@@ -186,16 +188,17 @@ onMounted(() => {
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 6px;
+  padding: 6px 14px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
   transition: all var(--transition-fast);
   position: relative;
   overflow: hidden;
-  font-size: var(--font-size-sm);
+  font-size: 15px;
   font-weight: 500;
+  font-family: var(--font-heading);
 }
 
 .menu-item::before {
@@ -220,8 +223,8 @@ onMounted(() => {
 
 .menu-item.active {
   color: var(--primary-purple);
-  background: var(--bg-overlay);
-  font-weight: 500;
+  background: rgba(139, 92, 246, 0.12);
+  font-weight: 600;
 }
 
 .menu-item.active::after {
@@ -230,14 +233,15 @@ onMounted(() => {
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 60%;
+  width: 70%;
   height: 3px;
-  background: var(--primary-purple);
-  border-radius: 2px 2px 0 0;
+  background: linear-gradient(90deg, transparent, var(--primary-purple), transparent);
+  border-radius: 3px 3px 0 0;
+  box-shadow: 0 -1px 2px rgba(139, 92, 246, 0.3);
 }
 
 .menu-icon {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .navbar-user {
@@ -275,24 +279,23 @@ onMounted(() => {
   border-color: var(--primary-purple-dark);
 }
 
-/* 导航栏装饰线 */
+/* 导航栏下 1px 渐变线 */
 .navbar-decoration {
-  height: 2px;
+  height: 1px;
   background: linear-gradient(
     90deg,
-    transparent,
-    var(--primary-purple-light),
-    var(--primary-purple),
-    var(--primary-purple-light),
-    transparent
+    transparent 0%,
+    var(--primary-purple-lighter) 20%,
+    var(--primary-purple) 50%,
+    var(--primary-purple-lighter) 80%,
+    transparent 100%
   );
-  background-size: 200% 100%;
-  animation: shimmer 3s linear infinite;
+  opacity: 0.9;
 }
 
 /* 主内容区 */
 .main-content {
-  min-height: calc(100vh - 40px);
+  min-height: calc(100vh - 52px);
   padding: 0;
   max-width: 100%;
   margin: 0 auto;
