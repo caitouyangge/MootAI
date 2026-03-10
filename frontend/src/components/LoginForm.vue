@@ -197,14 +197,13 @@ const handleLogin = async () => {
       localStorage.setItem('token', response.data.token)
       localStorage.setItem('username', response.data.username)
       localStorage.setItem('userId', response.data.userId)
-      
+
       ElMessage.success('登录成功')
-      // 关闭登录窗口
       emit('close')
-      // 延迟跳转，确保弹窗关闭动画完成
+      // 等弹窗关闭动画完成后再跳转，配合路由转场更丝滑
       setTimeout(() => {
         router.push('/home')
-      }, 200)
+      }, 520)
     } else {
       ElMessage.error(response.message || '登录失败')
     }
