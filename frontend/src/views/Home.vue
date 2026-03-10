@@ -7,12 +7,6 @@
     <div class="page-banner fade-in">
       <div class="banner-content">
         <div class="banner-title-wrap">
-          <span class="title-icon-svg" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M24 4L8 14v20l16 10 16-10V14L24 4z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.12)"/>
-              <path d="M24 24V4M8 14l16 10 16-10M8 34l16-10 16 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-            </svg>
-          </span>
           <h1 class="banner-title">智能模拟法庭</h1>
         </div>
         <p class="banner-subtitle">AI驱动的拟真法庭辩论模拟系统</p>
@@ -131,9 +125,42 @@ const goToCourtroom = () => {
 <style scoped>
 .home-page {
   min-height: 100vh;
-  background: var(--bg-secondary);
+  /* 玻璃感底座：冷暖叠加渐变 + 更通透的底色 */
+  background:
+    radial-gradient(900px 520px at 12% 10%, rgba(99, 102, 241, 0.18), transparent 62%),
+    radial-gradient(780px 480px at 88% 16%, rgba(6, 182, 212, 0.14), transparent 58%),
+    radial-gradient(820px 520px at 70% 92%, rgba(168, 85, 247, 0.14), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.35));
   padding-bottom: 60px;
   position: relative;
+  isolation: isolate;
+}
+
+/* 背景光斑与噪点：让 blur 更“有东西可糊” */
+.home-page::before,
+.home-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-page::before {
+  background:
+    radial-gradient(520px 380px at 18% 22%, rgba(255, 255, 255, 0.22), transparent 60%),
+    radial-gradient(520px 420px at 86% 34%, rgba(255, 255, 255, 0.14), transparent 62%),
+    radial-gradient(640px 520px at 52% 88%, rgba(0, 0, 0, 0.10), transparent 62%);
+  filter: blur(18px);
+  opacity: 0.9;
+}
+
+.home-page::after {
+  /* 轻噪点：避免大面积纯色导致“塑料感” */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  mix-blend-mode: overlay;
+  opacity: 0.22;
 }
 
 /* 顶部分割/装饰线：产品首屏感 */
@@ -141,9 +168,6 @@ const goToCourtroom = () => {
   height: 3px;
   max-width: 200px;
   margin: 0 auto 32px;
-  background: linear-gradient(90deg, transparent, var(--primary-purple-light) 20%, var(--primary-purple) 50%, var(--primary-purple-light) 80%, transparent);
-  border-radius: 2px;
-  opacity: 0.7;
 }
 
 /* 页面横幅：紫色渐变 + 几何装饰 */
@@ -155,9 +179,11 @@ const goToCourtroom = () => {
   margin-bottom: 32px;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  max-width: 1400px;
+  /* 与下方主卡片容器统一宽度，避免两张“卡片”宽度不一致 */
+  max-width: 720px;
   margin-left: auto;
   margin-right: auto;
+  z-index: 1;
 }
 
 .page-banner::before {
@@ -187,17 +213,8 @@ const goToCourtroom = () => {
   margin-bottom: 14px;
 }
 
-.title-icon-svg {
-  width: 36px;
-  height: 36px;
-  color: rgba(255, 255, 255, 0.95);
-  animation: float 3s ease-in-out infinite;
-}
 
-.title-icon-svg svg {
-  width: 100%;
-  height: 100%;
-}
+
 
 .banner-title {
   font-size: 24px;
@@ -257,15 +274,22 @@ const goToCourtroom = () => {
   max-width: 720px;
   margin: 0 auto;
   padding: 48px 24px 32px;
+  position: relative;
+  z-index: 1;
 }
 
 /* 产品卡片：玻璃态 + 卡片悬浮阴影 + 统一 hover */
 .welcome-card {
   --card-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(6, 182, 212, 0.18);
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.78),
+    rgba(255, 255, 255, 0.62)
+  );
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.44);
   border-radius: var(--card-radius);
   padding: 56px 40px 48px;
   text-align: center;
@@ -273,9 +297,34 @@ const goToCourtroom = () => {
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
+.welcome-card::before {
+  /* 顶部高光与边缘“折射感” */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(520px 220px at 20% 10%, rgba(255, 255, 255, 0.60), transparent 60%),
+    radial-gradient(520px 240px at 90% 0%, rgba(255, 255, 255, 0.25), transparent 62%);
+  opacity: 0.55;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.welcome-card::after {
+  /* 细内描边：更像玻璃边缘 */
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border-radius: calc(var(--card-radius) - 10px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+  opacity: 0.8;
+}
+
 .welcome-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: var(--shadow-card-hover), 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
 .welcome-icon-svg {
@@ -312,9 +361,23 @@ const goToCourtroom = () => {
   flex-wrap: wrap;
   margin-bottom: 40px;
   padding: 24px 16px;
-  background: rgba(6, 182, 212, 0.05);
-  border-radius: 16px;
-  border: 1px solid rgba(6, 182, 212, 0.10);
+  position: relative;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.06);
+}
+
+.feature-highlights::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(520px 220px at 12% 0%, rgba(255, 255, 255, 0.55), transparent 60%);
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .feature-item {
@@ -437,6 +500,16 @@ const goToCourtroom = () => {
     height: 48px;
     padding: 0 28px;
     font-size: 15px;
+  }
+}
+
+/* 降级：不支持 backdrop-filter 时，提高不透明度避免“脏灰” */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .welcome-card {
+    background: rgba(255, 255, 255, 0.92);
+  }
+  .feature-highlights {
+    background: rgba(255, 255, 255, 0.88);
   }
 }
 </style>

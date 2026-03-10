@@ -47,9 +47,6 @@
           </div>
         </div>
       </div>
-      
-      <!-- 动态装饰线 -->
-      <div class="navbar-decoration"></div>
     </header>
     
     <!-- 主内容区 -->
@@ -165,7 +162,6 @@ onMounted(() => {
 
 .logo-icon {
   font-size: 22px;
-  animation: float 3s ease-in-out infinite;
 }
 
 .logo-text {
@@ -208,7 +204,6 @@ onMounted(() => {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.10), transparent);
   transition: left var(--transition-base);
 }
 
@@ -235,7 +230,6 @@ onMounted(() => {
   transform: translateX(-50%);
   width: 70%;
   height: 3px;
-  background: linear-gradient(90deg, transparent, var(--primary-purple), transparent);
   border-radius: 3px 3px 0 0;
   box-shadow: 0 -1px 2px rgba(6, 182, 212, 0.30);
 }
