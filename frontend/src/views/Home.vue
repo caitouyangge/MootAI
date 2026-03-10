@@ -89,11 +89,20 @@
 </template>
 
 <script setup>
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AnimatedBackground from '@/components/AnimatedBackground.vue'
 
 const router = useRouter()
+
+onMounted(() => {
+  document.body.classList.add('no-scroll')
+})
+
+onBeforeUnmount(() => {
+  document.body.classList.remove('no-scroll')
+})
 
 const goToCourtroom = () => {
   try {
@@ -111,16 +120,19 @@ const goToCourtroom = () => {
 
 <style scoped>
 .home-page {
-  min-height: 100vh;
+  /* 在 Layout 下总高度 = 52px + 本块高度，用 100vh - 52px 避免底部多出一截可滚动空白 */
+  min-height: calc(100vh - 52px);
+  box-sizing: border-box; /* 让 padding 计入高度，避免底部产生额外可滚动空白 */
   padding-bottom: 60px;
   position: relative;
+  z-index: 1; /* 高于固定背景，保证内容在背景之上 */
   isolation: isolate;
   overflow: hidden;
 }
 
-/* 背景（与欢迎页同一套） */
+/* 背景：固定铺满视口并置于导航栏之下（z-index 0），毛玻璃可透出；内容区用 position + z-index 盖在上方 */
 .page-bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
 }
