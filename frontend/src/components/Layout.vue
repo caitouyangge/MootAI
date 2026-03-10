@@ -198,10 +198,7 @@ onMounted(() => {
 .logo-text {
   font-size: 17px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary-purple);
   letter-spacing: 0.02em;
 }
 
@@ -322,17 +319,12 @@ onMounted(() => {
   border-color: var(--primary-purple-dark);
 }
 
-/* 导航栏下 1px 渐变线 */
+/* 导航栏下 1px 毛玻璃装饰线 */
 .navbar-decoration {
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--primary-purple-lighter) 20%,
-    var(--primary-purple) 50%,
-    var(--primary-purple-lighter) 80%,
-    transparent 100%
-  );
+  background: rgba(6, 182, 212, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   opacity: 0.9;
 }
 

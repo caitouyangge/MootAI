@@ -322,7 +322,9 @@ h1, h2, h3, h4, .el-button, .cta-primary, .start-button, .login-btn {
 .text-accent-green { color: var(--accent-green); }
 .bg-accent-green-soft { background: var(--accent-green-soft); }
 .badge-accent {
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  background: rgba(184, 134, 11, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: #fff;
   padding: 2px 8px;
   border-radius: var(--radius-sm);

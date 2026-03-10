@@ -259,11 +259,7 @@ const goToCourtroom = () => {
 .welcome-card {
   --card-radius: 24px;
   position: relative;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.78),
-    rgba(255, 255, 255, 0.62)
-  );
+  background: rgba(255, 255, 255, 0.68);
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
   border: 1px solid rgba(255, 255, 255, 0.44);
@@ -281,12 +277,10 @@ const goToCourtroom = () => {
   inset: 0;
   border-radius: inherit;
   background:
-    /* 细点阵纹理：增强“卡片背景小图案”的可见度 */
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'%3E%3Cg fill='none'%3E%3Ccircle cx='6' cy='6' r='1.2' fill='%236366f1' opacity='0.18'/%3E%3Ccircle cx='22' cy='18' r='1.0' fill='%236366f1' opacity='0.14'/%3E%3Ccircle cx='34' cy='34' r='1.2' fill='%236366f1' opacity='0.18'/%3E%3Ccircle cx='14' cy='30' r='0.9' fill='%236366f1' opacity='0.12'/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(520px 220px at 20% 10%, rgba(255, 255, 255, 0.60), transparent 60%),
-    radial-gradient(520px 240px at 90% 0%, rgba(255, 255, 255, 0.25), transparent 62%);
-  background-size: 44px 44px, auto, auto;
-  background-repeat: repeat, no-repeat, no-repeat;
+    rgba(255, 255, 255, 0.35);
+  background-size: 44px 44px, auto;
+  background-repeat: repeat, no-repeat;
   opacity: 0.72;
   pointer-events: none;
   mix-blend-mode: overlay;
@@ -356,7 +350,9 @@ const goToCourtroom = () => {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(520px 220px at 12% 0%, rgba(255, 255, 255, 0.55), transparent 60%);
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   opacity: 0.35;
   pointer-events: none;
 }
@@ -369,15 +365,16 @@ const goToCourtroom = () => {
   min-width: 100px;
   opacity: 0;
   transform: translateY(12px) scale(0.98);
-  animation: featurePop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+  /* 功能点：等主卡片基本就位后再依次弹入 */
+  animation: featurePop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.8s forwards;
 }
 
 .feature-item:nth-child(2) {
-  animation-delay: 0.7s;
+  animation-delay: 1s;
 }
 
 .feature-item:nth-child(3) {
-  animation-delay: 0.9s;
+  animation-delay: 1.2s;
 }
 
 @keyframes featurePop {
@@ -425,14 +422,17 @@ const goToCourtroom = () => {
   font-weight: 600;
   letter-spacing: 0.06em;
   color: #fff;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+  background: rgba(6, 182, 212, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: none;
   border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 8px 32px rgba(6, 182, 212, 0.40);
   opacity: 0;
   transform: translateY(14px) scale(0.96);
-  animation: ctaEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.1s forwards;
+  /* 三个功能点弹入结束后再入场（约 0.8+0.7、1+0.7、1.2+0.7 中最大 1.9s） */
+  animation: ctaEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.8s forwards;
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 

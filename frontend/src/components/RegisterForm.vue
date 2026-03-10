@@ -303,7 +303,9 @@ const handleRegister = async () => {
   right: -30%;
   width: 280px;
   height: 280px;
-  background: radial-gradient(circle, var(--primary-purple-lightest) 0%, transparent 65%);
+  background: rgba(207, 250, 254, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 50%;
   opacity: 0.35;
   animation: float 8s ease-in-out infinite;
@@ -357,7 +359,9 @@ const handleRegister = async () => {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-purple-light), var(--primary-purple));
+  background: rgba(6, 182, 212, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   position: relative;
   box-shadow: 0 4px 12px rgba(6, 182, 212, 0.30);
 }
@@ -379,10 +383,7 @@ const handleRegister = async () => {
   font-weight: 700;
   margin: 0 0 6px 0;
   letter-spacing: 0.02em;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary-purple);
 }
 
 .form-subtitle {
@@ -546,14 +547,18 @@ const handleRegister = async () => {
   font-weight: 600;
   letter-spacing: 0.04em;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+  background: rgba(6, 182, 212, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: none;
   transition: all var(--transition-base);
   box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
 }
 
 .register-btn:hover {
-  background: linear-gradient(135deg, var(--primary-purple-dark), var(--primary-purple));
+  background: rgba(8, 145, 178, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(6, 182, 212, 0.40);
 }

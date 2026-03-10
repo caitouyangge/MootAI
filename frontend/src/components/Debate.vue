@@ -2543,15 +2543,21 @@ onUnmounted(() => {
 }
 
 .avatar-judge {
-  background: linear-gradient(135deg, #e6a23c 0%, #ebb563 100%);
+  background: rgba(230, 162, 60, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .avatar-plaintiff {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  background: rgba(64, 158, 255, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .avatar-defendant {
-  background: linear-gradient(135deg, #f56c6c 0%, #f89898 100%);
+  background: rgba(245, 108, 108, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* 消息气泡 */
@@ -2865,7 +2871,9 @@ onUnmounted(() => {
   gap: 12px;
   padding: 16px;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+  background: rgba(255, 243, 205, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 8px;
   border-left: 4px solid #ffc107;
   animation: fadeIn 0.3s ease-in;
