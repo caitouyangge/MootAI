@@ -84,7 +84,12 @@
               </div>
             </div>
             <div v-if="selectedIdentity" class="step-actions">
-              <el-button type="primary" size="large" @click="completeStep('identity')">
+              <el-button
+                type="primary"
+                size="large"
+                class="primary-cta-btn"
+                @click="completeStep('identity')"
+              >
                 确认并继续
               </el-button>
             </div>
@@ -154,7 +159,14 @@
               <button v-if="fileList.length > 0" class="clear-btn" @click="clearAllFiles">清空所有文件</button>
             </div>
             <div v-if="fileList.length > 0" class="step-actions">
-              <el-button type="primary" size="large" @click="completeStep('upload')">确认并继续</el-button>
+              <el-button
+                type="primary"
+                size="large"
+                class="primary-cta-btn"
+                @click="completeStep('upload')"
+              >
+                确认并继续
+              </el-button>
             </div>
           </template>
 
@@ -168,7 +180,7 @@
               <!-- 生成按钮 -->
               <button
                 v-if="!caseDescription"
-                class="generate-btn"
+                class="primary-cta-btn generate-btn"
                 :class="{ loading: generating }"
                 :disabled="generating"
                 @click="generateDescription"
@@ -206,7 +218,14 @@
               </div>
             </div>
             <div v-if="caseDescription" class="step-actions">
-              <el-button type="primary" size="large" @click="completeStep('description')">确认并继续</el-button>
+              <el-button
+                type="primary"
+                size="large"
+                class="primary-cta-btn"
+                @click="completeStep('description')"
+              >
+                确认并继续
+              </el-button>
             </div>
           </template>
 
@@ -236,7 +255,14 @@
               </div>
             </div>
             <div v-if="selectedJudgeType" class="step-actions">
-              <el-button type="primary" size="large" @click="completeStep('judge')">确认并继续</el-button>
+              <el-button
+                type="primary"
+                size="large"
+                class="primary-cta-btn"
+                @click="completeStep('judge')"
+              >
+                确认并继续
+              </el-button>
             </div>
           </template>
 
@@ -291,7 +317,14 @@
               </div>
             </div>
             <div v-if="selectedOpponentStrategy" class="step-actions">
-              <el-button type="primary" size="large" @click="completeStep('strategy')">开始庭审</el-button>
+              <el-button
+                type="primary"
+                size="large"
+                class="primary-cta-btn"
+                @click="completeStep('strategy')"
+              >
+                开始庭审
+              </el-button>
             </div>
           </template>
 
@@ -1198,6 +1231,38 @@ onMounted(async () => {
   letter-spacing: 0.02em;
 }
 
+/* 统一主操作按钮样式（与登录按钮一致） */
+.primary-cta-btn {
+  height: 44px;
+  padding: 0 24px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-lg);
+  background: rgba(6, 182, 212, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: none;
+  transition: all var(--transition-base);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+}
+
+.primary-cta-btn:hover:not(:disabled) {
+  background: rgba(8, 145, 178, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.4);
+}
+
+.primary-cta-btn:active {
+  transform: translateY(0);
+}
+
 /* ─────────────── 身份选择卡片 ─────────────── */
 .identity-selector {
   display: grid;
@@ -1516,27 +1581,6 @@ onMounted(async () => {
 
 .generate-btn {
   width: 100%;
-  height: 52px;
-  border: none;
-  border-radius: var(--radius-lg);
-  background: var(--primary-purple);
-  color: #fff;
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  font-family: var(--font-heading);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-  transition: all var(--transition-hover);
-  letter-spacing: 0.02em;
-}
-
-.generate-btn:hover:not(:disabled) {
-  background: var(--primary-purple-dark);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
 }
 
 .generate-btn:disabled {
