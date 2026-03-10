@@ -2596,8 +2596,8 @@ onUnmounted(() => {
 
 /* 消息气泡 */
 .message-bubble {
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
   font-size: 13px;
   color: var(--text-primary);
   line-height: 1.5;
@@ -2605,27 +2605,31 @@ onUnmounted(() => {
   position: relative;
   max-width: 100%;
   display: inline-block;
+  border: 1px solid rgba(148, 163, 253, 0.22);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .message-bubble-left {
   background: rgba(129, 140, 248, 0.12);
-  border-radius: 12px 12px 12px 4px;
+  border-color: rgba(129, 140, 248, 0.28);
+  border-radius: 12px 12px 12px 6px;
   align-self: flex-start;
 }
 
 .message-bubble-center {
-  background: #fff7e6;
-  border-radius: 10px;
+  background: rgba(255, 247, 230, 0.92);
+  border-color: rgba(234, 179, 8, 0.28);
+  border-radius: 12px;
   text-align: center;
-  display: block;
-  margin: 0 auto;
+  display: inline-block;
 }
 
 .message-bubble-right {
-  background: #ffffff;
-  border-radius: 12px 12px 4px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(248, 113, 113, 0.25);
+  border-radius: 12px 12px 6px 12px;
   align-self: flex-end;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
 }
 
 .message-text {
