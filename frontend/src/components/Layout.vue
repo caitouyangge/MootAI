@@ -88,7 +88,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import LoginForm from './LoginForm.vue'
 import RegisterForm from './RegisterForm.vue'
 
@@ -107,7 +106,6 @@ const handleLogout = () => {
   localStorage.removeItem('username')
   localStorage.removeItem('userId')
   username.value = ''
-  ElMessage.success('已退出登录')
   router.push({ name: 'welcome' })
 }
 
@@ -129,7 +127,7 @@ onMounted(() => {
 <style scoped>
 .bilibili-layout {
   min-height: 100vh;
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 /* 顶部导航栏：毛玻璃（透出下方紫色渐变） */
@@ -142,6 +140,29 @@ onMounted(() => {
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: var(--shadow-md);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  animation: navBarSlideIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes navBarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes navItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -166,6 +187,8 @@ onMounted(() => {
   gap: 12px;
   user-select: none;
   font-family: var(--font-heading);
+  animation: navItemFadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.15s forwards;
+  opacity: 0;
 }
 
 .logo-icon {
@@ -187,6 +210,8 @@ onMounted(() => {
   gap: 8px;
   flex: 1;
   justify-content: center;
+  animation: navItemFadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.25s forwards;
+  opacity: 0;
 }
 
 .menu-item {
@@ -203,6 +228,20 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 500;
   font-family: var(--font-heading);
+}
+
+.menu-item:nth-child(1) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards; opacity: 0; }
+.menu-item:nth-child(2) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.48s forwards; opacity: 0; }
+
+@keyframes menuItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .menu-item::before {
@@ -249,6 +288,8 @@ onMounted(() => {
 .navbar-user {
   display: flex;
   align-items: center;
+  animation: navItemFadeIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.35s forwards;
+  opacity: 0;
 }
 
 .user-info {

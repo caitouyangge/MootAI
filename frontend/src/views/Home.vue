@@ -1,10 +1,5 @@
 <template>
   <div class="home-page">
-    <AnimatedBackground
-      class="page-bg"
-      :enable-ripples="true"
-      :click-to-ripple="true"
-    />
     <!-- 顶部分割/装饰线 -->
     <div class="top-accent" aria-hidden="true"></div>
 
@@ -23,8 +18,19 @@
       <div class="welcome-card card-hover fade-in">
         <div class="welcome-icon-svg" aria-hidden="true">
           <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M32 8L12 20v24l20 12 20-12V20L32 8z" stroke="var(--primary-purple)" stroke-width="2" stroke-linejoin="round" fill="var(--primary-purple-lightest)"/>
-            <path d="M32 32V8M12 20l20 12 20-12M12 44l20-12 20 12" stroke="var(--primary-purple)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+            <!-- 天平底座 -->
+            <path d="M12 52h40" stroke="var(--primary-purple)" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M20 52v-4h24v4" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- 立柱 -->
+            <path d="M32 52V28" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round"/>
+            <!-- 横梁 -->
+            <path d="M18 28h28" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round"/>
+            <!-- 左盘 + 吊线 -->
+            <path d="M18 28v6l-6 8h12l-6-8v-6" stroke="var(--primary-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="var(--primary-purple-lightest)" opacity="0.9"/>
+            <!-- 右盘 + 吊线 -->
+            <path d="M46 28v6l6 8H40l6-8v-6" stroke="var(--primary-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="var(--primary-purple-lightest)" opacity="0.9"/>
+            <!-- 顶部装饰（象征公正/AI） -->
+            <circle cx="32" cy="22" r="5" stroke="var(--primary-purple)" stroke-width="1.8" fill="var(--primary-purple-lightest)"/>
           </svg>
         </div>
         <h2 class="welcome-title">欢迎使用智能模拟法庭</h2>
@@ -89,11 +95,19 @@
 </template>
 
 <script setup>
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import AnimatedBackground from '@/components/AnimatedBackground.vue'
 
 const router = useRouter()
+
+onMounted(() => {
+  document.body.classList.add('no-scroll')
+})
+
+onBeforeUnmount(() => {
+  document.body.classList.remove('no-scroll')
+})
 
 const goToCourtroom = () => {
   try {
@@ -111,18 +125,14 @@ const goToCourtroom = () => {
 
 <style scoped>
 .home-page {
-  min-height: 100vh;
+  /* 在 Layout 下总高度 = 52px + 本块高度，用 100vh - 52px 避免底部多出一截可滚动空白 */
+  min-height: calc(100vh - 52px);
+  box-sizing: border-box; /* 让 padding 计入高度，避免底部产生额外可滚动空白 */
   padding-bottom: 60px;
   position: relative;
+  z-index: 1; /* 高于固定背景，保证内容在背景之上 */
   isolation: isolate;
   overflow: hidden;
-}
-
-/* 背景（与欢迎页同一套） */
-.page-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
 }
 
 /* 顶部分割/装饰线：产品首屏感 */
@@ -147,6 +157,14 @@ const goToCourtroom = () => {
   margin-left: auto;
   margin-right: auto;
   z-index: 1;
+}
+
+.page-banner.fade-in {
+  /* 首屏横幅：带轻微 3D 下落 + 光感 */
+  transform-origin: center top;
+  animation:
+    homeHeroDrop 1s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both,
+    homeHeroGlow 1.8s ease-out 0.4s both;
 }
 
 .page-banner::before {
@@ -192,6 +210,49 @@ const goToCourtroom = () => {
   padding: 48px 24px 32px;
   position: relative;
   z-index: 1;
+}
+
+.welcome-card.fade-in {
+  /* 主卡片：稍晚于横幅的上升动画 */
+  animation: homeCardRise 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+}
+
+@keyframes homeHeroDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.96) rotateX(-10deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotateX(0deg);
+    filter: blur(0);
+  }
+}
+
+@keyframes homeHeroGlow {
+  from {
+    box-shadow: 0 0 0 rgba(6, 182, 212, 0.0);
+  }
+  40% {
+    box-shadow: 0 14px 40px rgba(6, 182, 212, 0.55);
+  }
+  to {
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@keyframes homeCardRise {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.96);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
 }
 
 /* 产品卡片：玻璃态 + 卡片悬浮阴影 + 统一 hover */
@@ -306,6 +367,32 @@ const goToCourtroom = () => {
   align-items: center;
   gap: 10px;
   min-width: 100px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  animation: featurePop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+}
+
+.feature-item:nth-child(2) {
+  animation-delay: 0.7s;
+}
+
+.feature-item:nth-child(3) {
+  animation-delay: 0.9s;
+}
+
+@keyframes featurePop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .feature-icon {
@@ -343,6 +430,9 @@ const goToCourtroom = () => {
   border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 8px 32px rgba(6, 182, 212, 0.40);
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  animation: ctaEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.1s forwards;
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
@@ -353,6 +443,21 @@ const goToCourtroom = () => {
 
 .start-button:active {
   transform: scale(0.98) translateY(0);
+}
+
+@keyframes ctaEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .button-icon-svg {
