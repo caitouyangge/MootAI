@@ -482,10 +482,14 @@ onUnmounted(() => {
 <style scoped>
 .courtroom-page {
   width: 100%;
-  min-height: calc(100vh - 64px);
+  /* 在 Layout 下总高度 = 52px（导航栏）+ 本块高度，这里使用 100vh - 52px，
+     避免在窗口层面多出一截可滚动的纯空白区域，滚动仍由窗口统一处理。 */
+  min-height: calc(100vh - 52px);
+  box-sizing: border-box;
   position: relative;
   padding: 0;
-  overflow: hidden;
+  z-index: 1;
+  overflow: visible;
   /* 确保页面可见 */
   opacity: 1 !important;
   visibility: visible !important;
@@ -494,7 +498,8 @@ onUnmounted(() => {
 
 /* 与主页面同一套背景 + 水波纹 */
 .courtroom-bg {
-  position: absolute;
+  /* 固定铺满视口，置于导航栏之下（z-index 0），供毛玻璃透出 */
+  position: fixed;
   inset: 0;
   z-index: 0;
 }
