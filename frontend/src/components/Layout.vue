@@ -11,16 +11,18 @@
         
         <!-- 导航菜单 -->
         <nav class="navbar-menu">
-          <router-link 
-            v-for="item in menuItems" 
-            :key="item.path"
-            :to="item.path"
+          <component
+            v-for="item in menuItems"
+            :key="item.name"
+            :is="item.path ? 'router-link' : 'div'"
+            v-bind="item.path ? { to: item.path } : {}"
             class="menu-item"
             active-class="active"
+            :class="{ 'is-placeholder': !item.path }"
           >
             <span class="menu-icon">{{ item.icon }}</span>
             <span class="menu-text">{{ item.name }}</span>
-          </router-link>
+          </component>
         </nav>
         
         <!-- 用户信息 -->
@@ -99,6 +101,10 @@ const username = ref(localStorage.getItem('username') || '')
 const menuItems = [
   { path: '/home', name: '首页', icon: '🏠' },
   { path: '/courtroom', name: '模拟法庭', icon: '⚖️' },
+  { path: '', name: '案件材料', icon: '📁' },
+  { path: '', name: '辩论回顾', icon: '📝' },
+  { path: '', name: '知识配置', icon: '📚' },
+  { path: '', name: '个人主页', icon: '👤' },
 ]
 
 const handleLogout = () => {
@@ -215,8 +221,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
+  padding: 6px 16px;
+  border-radius: 999px; /* 椭圆矩形样式 */
   color: var(--text-secondary);
   text-decoration: none;
   transition: all var(--transition-fast);
@@ -225,10 +231,21 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 500;
   font-family: var(--font-heading);
+  background: transparent;
 }
 
 .menu-item:nth-child(1) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards; opacity: 0; }
 .menu-item:nth-child(2) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.48s forwards; opacity: 0; }
+.menu-item:nth-child(3) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.56s forwards; opacity: 0; }
+.menu-item:nth-child(4) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.64s forwards; opacity: 0; }
+.menu-item:nth-child(5) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.72s forwards; opacity: 0; }
+.menu-item:nth-child(6) { animation: menuItemFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.8s forwards; opacity: 0; }
+
+.menu-item.is-placeholder {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.8;
+}
 
 @keyframes menuItemFadeIn {
   from {
