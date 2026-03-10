@@ -200,11 +200,11 @@ const getParticleStyle = (index) => {
   justify-content: space-between;
   height: 100%;
   padding: 40px;
-  transition: opacity var(--transition-base);
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .welcome-content.fade-out {
-  opacity: 0.2;
+  opacity: 0.18;
 }
 
 /* Hero区域 */
@@ -380,24 +380,64 @@ const getParticleStyle = (index) => {
   z-index: 1000;
 }
 
-/* 弹窗过渡动画 */
-.modal-enter-active,
-.modal-leave-active {
-  transition: all var(--transition-base);
+/* 弹窗过渡：丝滑奢华感 */
+.modal-enter-active {
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+              backdrop-filter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-enter-active > * {
+  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: 0.06s;
+  will-change: transform, opacity;
 }
 
-.modal-enter-from,
-.modal-leave-to {
+.modal-leave-active {
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 1, 1),
+              backdrop-filter 0.3s cubic-bezier(0.4, 0, 1, 1);
+  transition-delay: 0.12s;
+}
+.modal-leave-active > * {
+  transition: transform 0.32s cubic-bezier(0.4, 0, 1, 1),
+              opacity 0.28s cubic-bezier(0.4, 0, 1, 1);
+  will-change: transform, opacity;
+}
+
+.modal-enter-from {
+  opacity: 0;
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+}
+.modal-enter-from > * {
+  transform: scale(0.94) translateY(28px);
   opacity: 0;
 }
 
-.modal-enter-from .modal-overlay > *,
-.modal-leave-to .modal-overlay > * {
-  transform: scale(0.9) translateY(20px);
+.modal-enter-to {
+  opacity: 1;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.modal-enter-to > * {
+  transform: scale(1) translateY(0);
+  opacity: 1;
 }
 
-.modal-enter-to .modal-overlay > *,
-.modal-leave-from .modal-overlay > * {
+.modal-leave-from {
+  opacity: 1;
+}
+.modal-leave-from > * {
   transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.modal-leave-to {
+  opacity: 0;
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+}
+.modal-leave-to > * {
+  transform: scale(0.96) translateY(16px);
+  opacity: 0;
 }
 </style>
