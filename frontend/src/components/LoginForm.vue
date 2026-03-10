@@ -192,7 +192,6 @@ const handleLogin = async () => {
       localStorage.setItem('username', response.data.username)
       localStorage.setItem('userId', response.data.userId)
 
-      ElMessage.success('登录成功')
       emit('close')
       // 等弹窗关闭动画完成后再跳转，配合路由转场更丝滑
       setTimeout(() => {

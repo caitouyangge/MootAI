@@ -88,7 +88,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import LoginForm from './LoginForm.vue'
 import RegisterForm from './RegisterForm.vue'
 
@@ -107,7 +106,6 @@ const handleLogout = () => {
   localStorage.removeItem('username')
   localStorage.removeItem('userId')
   username.value = ''
-  ElMessage.success('已退出登录')
   router.push({ name: 'welcome' })
 }
 
