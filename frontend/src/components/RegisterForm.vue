@@ -12,7 +12,7 @@
         
         <!-- 标题 -->
         <div class="form-header">
-          <div class="form-icon">✨</div>
+          <div class="form-icon form-icon-register" aria-hidden="true"></div>
           <h2 class="form-title">注册</h2>
           <p class="form-subtitle">创建您的账号</p>
         </div>
@@ -22,39 +22,104 @@
           <el-form :model="registerForm" label-width="0" :rules="rules" ref="formRef">
             <el-form-item prop="username">
               <div class="input-wrapper">
-                <span class="input-icon">👤</span>
+                <span class="input-icon input-icon-user" aria-hidden="true"></span>
                 <el-input
                   v-model="registerForm.username"
                   placeholder="请输入用户名（3-50个字符）"
-                  clearable
                   class="custom-input"
-                />
+                  @focus="onUsernameFocus"
+                  @blur="onUsernameBlur"
+                >
+                  <template #suffix>
+                    <span
+                      v-if="usernameFocused && registerForm.username"
+                      class="field-suffix"
+                      @click.stop
+                    >
+                      <span
+                        class="suffix-btn clear-btn"
+                        title="清空"
+                        @click="registerForm.username = ''"
+                      >
+                        <el-icon><CircleClose /></el-icon>
+                      </span>
+                    </span>
+                  </template>
+                </el-input>
               </div>
             </el-form-item>
             <el-form-item prop="password">
               <div class="input-wrapper">
-                <span class="input-icon">🔒</span>
+                <span class="input-icon input-icon-lock" aria-hidden="true"></span>
                 <el-input
                   v-model="registerForm.password"
-                  type="password"
+                  :type="passwordVisible ? 'text' : 'password'"
                   placeholder="请输入密码（至少6个字符）"
-                  show-password
-                  clearable
                   class="custom-input"
-                />
+                  @focus="onPasswordFocus"
+                  @blur="onPasswordBlur"
+                >
+                  <template #suffix>
+                    <span
+                      v-if="passwordFocused"
+                      class="field-suffix"
+                      @click.stop
+                    >
+                      <span
+                        v-if="registerForm.password"
+                        class="suffix-btn clear-btn"
+                        title="清空"
+                        @click="registerForm.password = ''"
+                      >
+                        <el-icon><CircleClose /></el-icon>
+                      </span>
+                      <span
+                        class="suffix-btn password-eye"
+                        :title="passwordVisible ? '隐藏密码' : '显示密码'"
+                        @click="togglePasswordVisible"
+                      >
+                        <el-icon><Hide v-if="passwordVisible" /><View v-else /></el-icon>
+                      </span>
+                    </span>
+                  </template>
+                </el-input>
               </div>
             </el-form-item>
             <el-form-item prop="confirmPassword">
               <div class="input-wrapper">
-                <span class="input-icon">🔐</span>
+                <span class="input-icon input-icon-lock" aria-hidden="true"></span>
                 <el-input
                   v-model="registerForm.confirmPassword"
-                  type="password"
+                  :type="confirmPasswordVisible ? 'text' : 'password'"
                   placeholder="请再次输入密码"
-                  show-password
-                  clearable
                   class="custom-input"
-                />
+                  @focus="onConfirmPasswordFocus"
+                  @blur="onConfirmPasswordBlur"
+                >
+                  <template #suffix>
+                    <span
+                      v-if="confirmPasswordFocused"
+                      class="field-suffix"
+                      @click.stop
+                    >
+                      <span
+                        v-if="registerForm.confirmPassword"
+                        class="suffix-btn clear-btn"
+                        title="清空"
+                        @click="registerForm.confirmPassword = ''"
+                      >
+                        <el-icon><CircleClose /></el-icon>
+                      </span>
+                      <span
+                        class="suffix-btn password-eye"
+                        :title="confirmPasswordVisible ? '隐藏密码' : '显示密码'"
+                        @click="toggleConfirmPasswordVisible"
+                      >
+                        <el-icon><Hide v-if="confirmPasswordVisible" /><View v-else /></el-icon>
+                      </span>
+                    </span>
+                  </template>
+                </el-input>
               </div>
             </el-form-item>
           </el-form>
@@ -85,6 +150,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { View, Hide, CircleClose } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { useRouter } from 'vue-router'
 
@@ -97,6 +163,38 @@ const handleClose = () => {
   emit('close')
 }
 const loading = ref(false)
+
+const passwordVisible = ref(false)
+const confirmPasswordVisible = ref(false)
+const usernameFocused = ref(false)
+const passwordFocused = ref(false)
+const confirmPasswordFocused = ref(false)
+let usernameBlurTimer = null
+let passwordBlurTimer = null
+let confirmPasswordBlurTimer = null
+const togglePasswordVisible = () => { passwordVisible.value = !passwordVisible.value }
+const toggleConfirmPasswordVisible = () => { confirmPasswordVisible.value = !confirmPasswordVisible.value }
+const onUsernameFocus = () => {
+  if (usernameBlurTimer) { clearTimeout(usernameBlurTimer); usernameBlurTimer = null }
+  usernameFocused.value = true
+}
+const onUsernameBlur = () => {
+  usernameBlurTimer = setTimeout(() => { usernameFocused.value = false; usernameBlurTimer = null }, 150)
+}
+const onPasswordFocus = () => {
+  if (passwordBlurTimer) { clearTimeout(passwordBlurTimer); passwordBlurTimer = null }
+  passwordFocused.value = true
+}
+const onPasswordBlur = () => {
+  passwordBlurTimer = setTimeout(() => { passwordFocused.value = false; passwordBlurTimer = null }, 150)
+}
+const onConfirmPasswordFocus = () => {
+  if (confirmPasswordBlurTimer) { clearTimeout(confirmPasswordBlurTimer); confirmPasswordBlurTimer = null }
+  confirmPasswordFocused.value = true
+}
+const onConfirmPasswordBlur = () => {
+  confirmPasswordBlurTimer = setTimeout(() => { confirmPasswordFocused.value = false; confirmPasswordBlurTimer = null }, 150)
+}
 
 // 注册表单
 const registerForm = ref({
@@ -174,8 +272,9 @@ const handleRegister = async () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -185,40 +284,43 @@ const handleRegister = async () => {
 }
 
 .register-form-container {
-  width: 260px;
-  min-width: 260px;
-  max-width: 280px;
+  width: 360px;
+  min-width: 320px;
+  max-width: 400px;
 }
 
 .register-form {
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-  padding: 14px 12px;
-  box-shadow: var(--shadow-xl);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--radius-xl);
+  padding: 28px 24px;
+  box-shadow: 
+    var(--shadow-xl),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 32px 64px -12px rgba(139, 92, 246, 0.18);
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(139, 92, 246, 0.12);
 }
 
 .form-decoration {
   position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, var(--primary-purple-lightest), transparent);
+  top: -40%;
+  right: -30%;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, var(--primary-purple-lightest) 0%, transparent 65%);
   border-radius: 50%;
-  opacity: 0.2;
-  animation: float 6s ease-in-out infinite;
+  opacity: 0.35;
+  animation: float 8s ease-in-out infinite;
   z-index: 0;
 }
 
 .close-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -227,51 +329,73 @@ const handleRegister = async () => {
   transition: all var(--transition-fast);
   z-index: 100;
   pointer-events: auto;
+  color: var(--text-secondary);
 }
 
 .close-btn:hover {
   background: var(--bg-tertiary);
+  color: var(--primary-purple);
   transform: rotate(90deg);
 }
 
 .close-btn span {
-  font-size: 16px;
-  color: var(--text-secondary);
+  font-size: 20px;
   line-height: 1;
+  font-weight: 300;
   transition: color var(--transition-fast);
-}
-
-.close-btn:hover span {
-  color: var(--primary-purple);
 }
 
 .form-header {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
   position: relative;
   z-index: 1;
 }
 
 .form-icon {
-  font-size: 18px;
-  margin-bottom: 6px;
+  display: inline-block;
+  margin-bottom: 12px;
   animation: float 3s ease-in-out infinite;
 }
 
+.form-icon-register {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-purple-light), var(--primary-purple));
+  position: relative;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.form-icon-register::after {
+  content: '+';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1;
+}
+
 .form-title {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 0 0 4px 0;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .form-subtitle {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--text-secondary);
   margin: 0;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .form-content {
@@ -280,17 +404,19 @@ const handleRegister = async () => {
 }
 
 :deep(.el-form-item) {
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 }
 
 :deep(.el-input__wrapper) {
-  padding: 6px 10px;
-  min-height: 32px;
-  font-size: 12px;
+  padding: 10px 14px 10px 44px;
+  min-height: 44px;
+  font-size: 14px;
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
 }
 
 :deep(.el-input__inner) {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .input-wrapper {
@@ -301,46 +427,140 @@ const handleRegister = async () => {
 
 .input-icon {
   position: absolute;
-  left: 16px;
-  font-size: 18px;
+  left: 14px;
   z-index: 1;
   color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.input-icon-user {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.input-icon-user::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+
+.input-icon-lock {
+  width: 16px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  box-sizing: border-box;
+}
+
+.input-icon-lock::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
 }
 
 :deep(.custom-input .el-input__wrapper) {
-  padding-left: 48px;
-  border-radius: var(--radius-md);
+  padding-left: 44px;
+}
+
+.register-form :deep(.custom-input .el-input__wrapper) {
+  border-radius: var(--radius-lg);
   box-shadow: 0 0 0 1px var(--border-color) inset;
   transition: all var(--transition-fast);
 }
 
-:deep(.custom-input .el-input__wrapper:hover) {
+.register-form :deep(.custom-input .el-input__suffix:empty) {
+  width: 0;
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.register-form .field-suffix {
+  display: inline-flex;
+  align-items: center;
+}
+.register-form .suffix-btn.password-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 4px;
+  transition: color var(--transition-fast);
+}
+.register-form .suffix-btn.password-eye:hover {
+  color: var(--primary-purple);
+}
+.register-form .suffix-btn.password-eye .el-icon {
+  font-size: 16px;
+}
+.register-form .suffix-btn.clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 2px;
+  margin-right: 2px;
+  transition: color var(--transition-fast);
+}
+.register-form .suffix-btn.clear-btn:hover {
+  color: var(--primary-purple);
+}
+.register-form .suffix-btn.clear-btn .el-icon {
+  font-size: 14px;
+}
+
+.register-form :deep(.custom-input .el-input__wrapper:hover) {
   box-shadow: 0 0 0 1px var(--primary-purple-light) inset;
 }
 
-:deep(.custom-input .el-input__wrapper.is-focus) {
+.register-form :deep(.custom-input .el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 2px var(--primary-purple) inset;
 }
 
 .form-actions {
-  margin-top: 10px;
+  margin-top: 20px;
 }
 
 .register-btn {
   width: 100%;
-  height: 32px;
-  font-size: 12px;
+  height: 44px;
+  font-size: 15px;
   font-weight: 600;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
   border: none;
   transition: all var(--transition-base);
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
 }
 
 .register-btn:hover {
   background: linear-gradient(135deg, var(--primary-purple-dark), var(--primary-purple));
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
 }
 
 .register-btn:active {
@@ -348,21 +568,18 @@ const handleRegister = async () => {
 }
 
 .form-footer {
-  margin-top: 8px;
+  margin-top: 20px;
   text-align: center;
   position: relative;
   z-index: 1;
 }
 
 .login-link {
-  font-size: 11px;
-}
-
-.login-link {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: color var(--transition-fast);
+  letter-spacing: 0.02em;
 }
 
 .login-link:hover {
@@ -371,7 +588,7 @@ const handleRegister = async () => {
 
 .link-text {
   color: var(--primary-purple);
-  font-weight: 500;
-  text-decoration: underline;
+  font-weight: 600;
+  text-decoration: none;
 }
 </style>

@@ -1134,7 +1134,7 @@ def debate_generate_training_format(data):
     # 1. 降低上下文长度，提高模型处理效率
     # 2. 减少历史干扰，让模型更关注最新消息
     # 3. 降低重复历史内容的可能性
-    formatted_messages = format_context_to_messages(context, max_messages=4, agent_role=agent_role)
+    formatted_messages = format_context_to_messages(context, max_messages=2, agent_role=agent_role)
     logger.info(f"[训练格式] 格式化后的消息数量: {len(formatted_messages)}")
     
     # 如果有new_content，将其添加到消息历史中（这是训练数据格式的关键）
@@ -1904,10 +1904,10 @@ def get_strategy_for_role(current_role, user_identity, opponent_strategy, user_s
         return strategy_descriptions['balanced']
 
 
-def format_context_to_messages(context, max_messages=2, agent_role=None, simplify_history=True):
+def format_context_to_messages(context, max_messages=2, agent_role=None):
     """
     将训练数据格式的context（用\n分隔的对话）转换为消息格式
-    优化：限制消息数量以减少输入长度，加快生成速度，削弱历史消息干扰
+    优化：限制消息数量以减少输入长度，加快生成速度
     
     输入格式：
     "审判员: 现在开庭...\n公诉人: 根据起诉书...\n辩护人: 我方认为..."
@@ -1923,9 +1923,8 @@ def format_context_to_messages(context, max_messages=2, agent_role=None, simplif
     
     Args:
         context: 对话历史文本
-        max_messages: 最大消息数量（默认2，只保留最近的对话，削弱历史干扰）
+        max_messages: 最大消息数量（默认2，只保留最近的对话）
         agent_role: 当前AI扮演的角色（如"审判员"、"公诉人"、"辩护人"），只有这个角色的发言标记为assistant，其他都是user
-        simplify_history: 是否简化历史消息（除了最后一条），默认True
     """
     if not context:
         return []
@@ -1964,24 +1963,6 @@ def format_context_to_messages(context, max_messages=2, agent_role=None, simplif
             msg_role = 'assistant'
         else:
             msg_role = 'user'
-        
-        # 简化历史消息（除了最后一条），削弱历史干扰
-        # 最后一条消息保持完整，历史消息只保留关键信息
-        is_last_message = (i == len(lines) - 1)
-        if simplify_history and not is_last_message and len(content) > 80:
-            # 对于assistant消息（自己之前的发言），更激进地简化，避免模型重复自己的内容
-            if msg_role == 'assistant':
-                # assistant消息：只要超过80字符就简化，且只保留更少内容（30字符）
-                # 这样可以大幅减少模型看到自己之前完整发言的机会，降低重复概率
-                simplified_content = content[:30] + "...[已简化]..." + content[-30:]
-                logger.debug(f"[历史简化-ASSISTANT] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
-                content = simplified_content
-            else:
-                # user消息：按原逻辑简化（150字符阈值，保留40字符）
-                if len(content) > 150:
-                    simplified_content = content[:40] + "...[已简化]..." + content[-40:]
-                    logger.debug(f"[历史简化] 消息[{i}]已简化: {len(content)}字符 -> {len(simplified_content)}字符")
-                    content = simplified_content
         
         # 构建消息内容（统一使用中文冒号）
         if role_name:

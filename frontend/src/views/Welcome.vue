@@ -1,11 +1,13 @@
 <template>
-  <div class="welcome-page" @click="showLogin">
+  <div class="welcome-page" @click.self="() => {}">
     <!-- 动态紫色背景 -->
     <div class="animated-background">
       <div class="bg-gradient"></div>
+      <div class="bg-mesh"></div>
       <div class="bg-particles">
-        <div v-for="i in 20" :key="i" class="particle" :style="getParticleStyle(i)"></div>
+        <div v-for="i in 12" :key="i" class="particle" :style="getParticleStyle(i)"></div>
       </div>
+      <div class="bg-noise" aria-hidden="true"></div>
     </div>
     
     <!-- 主要内容 -->
@@ -14,25 +16,29 @@
       <div class="hero-section fade-in">
         <div class="logo-container float">
           <div class="logo-icon">⚖️</div>
+          <div class="logo-ring"></div>
           <div class="logo-glow"></div>
         </div>
         <h1 class="main-title">
           <span class="title-text">MootAI</span>
-          <span class="title-subtitle">AI模拟法庭</span>
+          <span class="title-subtitle">AI 模拟法庭</span>
         </h1>
+        <p class="main-description">拟真法庭辩论体验</p>
       </div>
       
-      <!-- 装饰元素 -->
-      <div class="decorative-elements">
-        <div class="deco-item deco-1 float" style="animation-delay: 0s">📜</div>
-        <div class="deco-item deco-2 float" style="animation-delay: 1s">⚖️</div>
-        <div class="deco-item deco-3 float" style="animation-delay: 2s">🔨</div>
+      <!-- 装饰元素（弱化，仅作氛围） -->
+      <div class="decorative-elements" aria-hidden="true">
+        <div class="deco-item deco-1 float" style="animation-delay: 0s"></div>
+        <div class="deco-item deco-2 float" style="animation-delay: 1s"></div>
+        <div class="deco-item deco-3 float" style="animation-delay: 2s"></div>
       </div>
       
-      <!-- 提示文字 -->
-      <div class="click-hint pulse">
-        <div class="hint-icon">👆</div>
-        <p>点击任意位置开始体验</p>
+      <!-- 主 CTA -->
+      <div class="cta-section">
+        <button type="button" class="cta-primary" @click.stop="showLogin">
+          登录 / 注册
+        </button>
+        <p class="cta-hint">点击上方按钮进入 MootAI</p>
       </div>
     </div>
     
@@ -89,7 +95,7 @@ const switchToLogin = () => {
 }
 
 const getParticleStyle = (index) => {
-  const size = Math.random() * 4 + 2
+  const size = Math.random() * 2.5 + 1.2
   const left = Math.random() * 100
   const delay = Math.random() * 5
   const duration = Math.random() * 3 + 2
@@ -141,6 +147,32 @@ const getParticleStyle = (index) => {
   animation: gradientShift 15s ease infinite;
 }
 
+.bg-mesh {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% 15%, rgba(255,255,255,0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 75% 85%, rgba(255,255,255,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 35% at 25% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* 极淡噪声纹理 */
+.bg-noise {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.035;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
 .bg-particles {
   position: absolute;
   top: 0;
@@ -152,10 +184,10 @@ const getParticleStyle = (index) => {
 
 .particle {
   position: absolute;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.35);
   border-radius: 50%;
   animation: float 3s ease-in-out infinite;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.25);
 }
 
 /* 主要内容 */
@@ -195,9 +227,21 @@ const getParticleStyle = (index) => {
 
 .logo-icon {
   font-size: 80px;
-  filter: drop-shadow(0 8px 16px rgba(139, 92, 246, 0.4));
+  filter: drop-shadow(0 8px 24px rgba(139, 92, 246, 0.35));
   position: relative;
   z-index: 1;
+}
+
+.logo-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  z-index: 0;
 }
 
 .logo-glow {
@@ -205,11 +249,11 @@ const getParticleStyle = (index) => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 140px;
-  height: 140px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent 70%);
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.25), transparent 70%);
   border-radius: 50%;
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulse 2.5s ease-in-out infinite;
 }
 
 .main-title {
@@ -218,14 +262,13 @@ const getParticleStyle = (index) => {
 
 .title-text {
   display: block;
-  font-size: 48px;
-  font-weight: bold;
-  background: linear-gradient(135deg, var(--primary-purple), var(--white));
+  font-size: clamp(48px, 6vw, 64px);
+  font-weight: 300;
+  background: linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 45%, rgba(220, 210, 255, 0.9) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 4px 8px rgba(139, 92, 246, 0.3);
-  letter-spacing: 3px;
+  letter-spacing: 0.2em;
   margin-bottom: 10px;
 }
 
@@ -234,17 +277,19 @@ const getParticleStyle = (index) => {
   font-size: 20px;
   color: var(--text-white);
   font-weight: 300;
-  letter-spacing: 5px;
+  letter-spacing: 0.35em;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  margin-top: 4px;
 }
 
 .main-description {
-  font-size: 16px;
-  color: var(--text-white);
-  line-height: 1.8;
-  margin: 24px 0 0 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  opacity: 0.95;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.6;
+  margin: 16px 0 0 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 /* 装饰元素 */
@@ -257,9 +302,12 @@ const getParticleStyle = (index) => {
 
 .deco-item {
   position: absolute;
-  font-size: 48px;
-  filter: drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3));
-  opacity: 0.6;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent);
+  border: 1px solid rgba(255,255,255,0.06);
+  opacity: 0.8;
 }
 
 .deco-1 {
@@ -277,26 +325,43 @@ const getParticleStyle = (index) => {
   left: 20%;
 }
 
-/* 提示文字 */
-.click-hint {
-  text-align: center;
-  color: var(--text-white);
-  animation: pulse 2s ease-in-out infinite;
+/* 主 CTA */
+.cta-section {
   margin-top: auto;
-  padding-bottom: 40px;
+  padding-bottom: 48px;
+  text-align: center;
 }
 
-.hint-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
-  animation: float 2s ease-in-out infinite;
+.cta-primary {
+  display: inline-block;
+  padding: 14px 40px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
-.click-hint p {
-  font-size: 14px;
-  margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  font-weight: 300;
+.cta-primary:hover {
+  transform: scale(1.04) translateY(-2px);
+  box-shadow: 0 12px 48px rgba(139, 92, 246, 0.55), 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+.cta-primary:active {
+  transform: scale(0.98) translateY(0);
+}
+
+.cta-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 12px 0 0 0;
+  font-weight: 400;
+  letter-spacing: 0.04em;
 }
 
 /* 弹窗覆盖层 */
@@ -306,8 +371,9 @@ const getParticleStyle = (index) => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
