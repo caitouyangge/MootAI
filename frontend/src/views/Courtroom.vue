@@ -143,13 +143,6 @@
             <div class="guide-desc">请完成以下步骤：选择身份 → 上传资料 → 生成案件描述</div>
           </div>
         </div>
-        <div v-else-if="activeTab === 'debate'" class="stage-guide">
-          <div class="guide-icon">⚖️</div>
-          <div class="guide-content">
-            <div class="guide-title">庭中辩论阶段</div>
-            <div class="guide-desc">选择审判员类型，开始模拟法庭辩论。您可以随时查看庭前准备的材料。</div>
-          </div>
-        </div>
         <div v-else-if="activeTab === 'verdict'" class="stage-guide">
           <div class="guide-icon">📜</div>
           <div class="guide-content">
@@ -655,7 +648,7 @@ onUnmounted(() => {
 /* 主内容区 */
 .courtroom-wrapper {
   margin-left: 0;
-  padding: 16px;
+  padding: 20px 18px 18px;
   max-width: 100%;
   margin: 0 auto;
   transition: margin-left var(--transition-base);
@@ -667,10 +660,10 @@ onUnmounted(() => {
 /* 页面标题 */
 .page-header {
   margin-bottom: 16px;
-  padding: 16px 20px;
-  background: rgba(6, 182, 212, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 18px 20px;
+  background: var(--primary-purple);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   position: relative;
@@ -687,62 +680,59 @@ onUnmounted(() => {
 
 .header-left {
   flex: 1;
-  text-align: center;
+  text-align: left;
 }
 
 .reset-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.28);
   color: var(--text-white);
   font-weight: 500;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
   transition: all var(--transition-base);
 }
 
 .reset-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
 }
 
 .page-header::before {
   content: '';
   position: absolute;
-  top: -50%;
-  right: -10%;
-  width: 400px;
-  height: 400px;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 50%;
-  animation: float 6s ease-in-out infinite;
+  inset: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
+    radial-gradient(circle at 85% 20%, rgba(148, 163, 253, 0.4), transparent 60%);
+  opacity: 0.85;
+  mix-blend-mode: screen;
 }
 
 .page-title {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   position: relative;
   z-index: 1;
 }
 
 .title-icon {
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .title-text {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   color: var(--text-white);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .page-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-white);
   opacity: 0.9;
   margin: 0;
@@ -756,8 +746,10 @@ onUnmounted(() => {
   display: flex;
   gap: 6px;
   margin-bottom: 16px;
-  background: var(--bg-primary);
-  padding: 4px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 5px;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
@@ -769,7 +761,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -780,13 +772,13 @@ onUnmounted(() => {
 }
 
 .nav-tab:hover {
-  background: var(--bg-overlay);
+  background: rgba(148, 163, 253, 0.08);
   color: var(--primary-purple);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
 .nav-tab.active {
-  background: rgba(6, 182, 212, 0.85);
+  background: var(--primary-purple);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: var(--text-white);
@@ -821,9 +813,9 @@ onUnmounted(() => {
 
 /* 内容区域 */
 .content-area {
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 18px 18px 16px;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-color);
   min-height: 300px;
@@ -835,13 +827,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  background: rgba(240, 249, 255, 0.9);
+  padding: 14px 16px;
+  background: rgba(248, 250, 252, 0.9);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-md);
-  border-left: 4px solid var(--primary-purple);
-  border: 1px solid rgba(6, 182, 212, 0.18);
+  border-left: 3px solid var(--primary-purple);
+  border: 1px solid rgba(148, 163, 253, 0.28);
   border-left-width: 4px;
   margin-bottom: 16px;
 }
@@ -856,14 +848,14 @@ onUnmounted(() => {
 }
 
 .guide-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .guide-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -882,8 +874,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   padding: 24px;
-  background: #fff3cd;
-  border: 2px solid #ffc107;
+  background: #fef3c7;
+  border: 1px solid #facc15;
   border-radius: var(--radius-lg);
   margin-bottom: 16px;
 }

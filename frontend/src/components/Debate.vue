@@ -1,65 +1,57 @@
 <template>
   <div class="debate-container">
-    <!-- 身份信息显示 -->
-    <div class="identity-display-section">
-      <h3 class="section-title">身份</h3>
-      <div class="identity-info">
-        <span class="identity-label">{{ userIdentity === 'plaintiff' ? '公诉人' : '辩护人' }}</span>
+    <!-- 顶部信息卡片网格 -->
+    <div class="debate-info-grid">
+      <!-- 身份信息显示 -->
+      <div class="identity-display-section debate-card">
+        <h3 class="section-title">身份</h3>
+        <div class="identity-info">
+          <span class="identity-label">{{ userIdentity === 'plaintiff' ? '公诉人' : '辩护人' }}</span>
+        </div>
       </div>
-    </div>
 
-    <!-- 庭前准备材料查看 -->
-    <div class="pretrial-materials-section">
-      <div class="materials-header">
-        <h3 class="section-title">庭前准备材料</h3>
-        <el-button
-          text
-          size="small"
-          @click="showMaterials = !showMaterials"
-          class="toggle-btn"
-        >
-          {{ showMaterials ? '收起' : '查看' }}
-        </el-button>
+      <!-- 审判员类型显示 -->
+      <div class="judge-display-section debate-card">
+        <h3 class="section-title">审判员类型</h3>
+        <div class="judge-info">
+          <span class="judge-label">{{ getJudgeLabel(selectedJudgeType) }}</span>
+          <span class="judge-desc">{{ getJudgeDescription(selectedJudgeType) }}</span>
+        </div>
       </div>
-      <el-collapse-transition>
-        <div v-show="showMaterials" class="materials-content">
-          <div class="material-item" v-if="fileList.length > 0">
-            <div class="material-label">上传文件：</div>
-            <div class="material-value">
-              <div v-for="(file, index) in fileList" :key="index" class="file-item">
-                <span class="file-icon">📄</span>
-                <span>{{ file.name }}</span>
-              </div>
-            </div>
-          </div>
+
+      <!-- 庭前准备材料（简洁文字展示，默认展开） -->
+      <div class="pretrial-materials-section debate-card">
+        <h3 class="section-title">庭前准备材料</h3>
+        <div class="materials-content">
           <div class="material-item" v-if="caseDescription">
             <div class="material-label">案件描述：</div>
             <div class="material-value case-description">{{ caseDescription }}</div>
           </div>
+          <div class="material-empty" v-else>
+            暂无案件描述，请先在庭前准备阶段生成。
+          </div>
         </div>
-      </el-collapse-transition>
-    </div>
-
-    <!-- 审判员类型显示 -->
-    <div class="judge-display-section">
-      <h3 class="section-title">审判员类型</h3>
-      <div class="judge-info">
-        <span class="judge-label">{{ getJudgeLabel(selectedJudgeType) }}</span>
-        <span class="judge-desc">{{ getJudgeDescription(selectedJudgeType) }}</span>
       </div>
-    </div>
 
-    <!-- 对方AI律师策略显示 -->
-    <div class="strategy-display-section">
-      <h3 class="section-title">对方AI律师策略</h3>
-      <div class="strategy-card" :class="userIdentity === 'plaintiff' ? 'defendant-strategy' : 'plaintiff-strategy'">
-        <div class="strategy-label">{{ userIdentity === 'plaintiff' ? '辩护人' : '公诉人' }}策略</div>
-        <div class="strategy-content">{{ userIdentity === 'plaintiff' ? defendantStrategy : plaintiffStrategy }}</div>
+      <!-- 对方AI律师策略显示 -->
+      <div class="strategy-display-section debate-card">
+        <h3 class="section-title">对方AI律师策略</h3>
+        <div
+          class="strategy-card"
+          :class="userIdentity === 'plaintiff' ? 'defendant-strategy' : 'plaintiff-strategy'"
+        >
+          <div class="strategy-label">
+            {{ userIdentity === 'plaintiff' ? '辩护人' : '公诉人' }}策略
+          </div>
+          <div class="strategy-content">
+            {{ userIdentity === 'plaintiff' ? defendantStrategy : plaintiffStrategy }}
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- 庭审对话区域 -->
-    <div class="debate-chat-section" :class="{ 'debate-ended': isDebateEnded }">
+    <div class="debate-chat-section debate-card" :class="{ 'debate-ended': isDebateEnded }">
       <div v-if="!isModelLoading" class="section-header">
         <h3 class="section-title">庭审现场</h3>
         <div v-if="debateStarted && messages.length > 0" class="header-actions">
@@ -424,8 +416,6 @@ const emit = defineEmits(['complete'])
 const caseStore = useCaseStore()
 const userIdentity = ref(caseStore.selectedIdentity || route.query.identity || 'plaintiff')
 const caseDescription = ref(caseStore.caseDescription || '')
-const fileList = ref(caseStore.fileList || [])
-const showMaterials = ref(false)
 
 // 审判员类型（从store读取）
 const judgeTypes = ref([
@@ -2076,23 +2066,69 @@ onUnmounted(() => {
 .debate-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
+}
+
+/* 顶部信息卡片网格 */
+.debate-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* 统一的卡片视觉：贴合首页玻璃态风格 */
+.debate-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px) saturate(1.18);
+  -webkit-backdrop-filter: blur(16px) saturate(1.18);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  padding: 14px 16px 12px;
+  overflow: hidden;
+  transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease,
+    border-color var(--transition-hover) ease, background-color var(--transition-hover) ease;
+}
+
+.debate-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.9), transparent 55%),
+    radial-gradient(circle at 100% 0, rgba(129, 140, 248, 0.16), transparent 55%);
+  opacity: 0.8;
+  mix-blend-mode: screen;
+}
+
+.debate-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.debate-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+  border-color: rgba(148, 163, 253, 0.6);
 }
 
 .section-title {
-  font-size: 12px;
-  color: #333;
+  font-size: 13px;
+  color: var(--text-primary);
   margin: 0;
   font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(148, 163, 253, 0.18);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .header-actions {
@@ -2106,15 +2142,30 @@ onUnmounted(() => {
   font-size: 12px;
   padding: 6px 12px;
   height: auto;
+  border-radius: 999px;
 }
 
-/* 身份信息显示 */
-.identity-display-section {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
+.copy-debate-btn {
+  background: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.3);
 }
+
+.copy-debate-btn:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.reset-debate-btn {
+  background: rgba(248, 113, 113, 0.04);
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.reset-debate-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+/* 身份 / 材料 / 审判员 / 策略四块信息区：使用统一卡片视觉，无额外样式覆盖 */
 
 .identity-info {
   display: flex;
@@ -2123,38 +2174,32 @@ onUnmounted(() => {
 }
 
 .identity-label {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #409eff;
-  padding: 8px 16px;
-  background: white;
-  border-radius: 6px;
-  border-left: 4px solid #409eff;
+  color: var(--primary-purple);
 }
 
 /* 庭前准备材料查看 */
 .pretrial-materials-section {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 .materials-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .toggle-btn {
   font-size: 12px;
-  color: #409eff;
+  color: var(--primary-purple);
+  padding: 2px 4px;
 }
 
 .materials-content {
-  padding-top: 10px;
-  border-top: 1px solid #e0e0e0;
+  margin-top: 8px;
+  padding-top: 4px;
 }
 
 .material-item {
@@ -2170,14 +2215,14 @@ onUnmounted(() => {
 .material-label {
   font-size: 12px;
   font-weight: 600;
-  color: #333;
-  min-width: 80px;
+  color: var(--text-primary);
+  min-width: 72px;
   flex-shrink: 0;
 }
 
 .material-value {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   flex: 1;
   line-height: 1.6;
 }
@@ -2187,10 +2232,10 @@ onUnmounted(() => {
   word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
-  padding: 8px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 .file-item {
@@ -2209,13 +2254,12 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 审判员类型显示 */
-.judge-display-section {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 15px;
+.material-empty {
+  font-size: 12px;
+  color: #9ca3af;
 }
 
+/* 审判员类型显示 */
 .judge-info {
   display: flex;
   flex-direction: column;
@@ -2223,78 +2267,75 @@ onUnmounted(() => {
 }
 
 .judge-label {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #409eff;
+  color: var(--primary-purple);
 }
 
 .judge-desc {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* 诉讼策略显示 */
-.strategy-display-section {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 15px;
-}
-
 .strategy-card {
-  background: white;
+  padding: 10px 12px;
   border-radius: 6px;
-  padding: 15px;
-  border-left: 4px solid;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
 .plaintiff-strategy {
-  border-left-color: #409eff;
+  border-left: 3px solid var(--primary-purple);
 }
 
-.defendant-strategy {
-  border-left-color: #f56c6c;
-}
 
 .strategy-label {
   font-size: 12px;
   font-weight: 600;
-  margin-bottom: 8px;
-  color: #333;
+  margin-bottom: 4px;
+  color: var(--text-primary);
 }
 
 .plaintiff-strategy .strategy-label {
-  color: #409eff;
+  color: var(--primary-purple-dark);
 }
 
 .defendant-strategy .strategy-label {
-  color: #f56c6c;
+  color: var(--accent-green-dark);
 }
 
 .strategy-content {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
 /* 庭审对话区域 */
 .debate-chat-section {
-  background: #f5f7fa;
-  border-radius: 8px;
-  padding: 15px;
+  background: rgba(248, 250, 252, 0.92);
+  border-radius: 20px;
+  padding: 18px 18px 14px;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 400px;
+  border: 1px solid rgba(148, 163, 253, 0.16);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.09);
 }
 
 .chat-container {
   flex: 1;
   overflow-y: auto;
-  padding: 15px;
-  background: #ededed;
-  border-radius: 6px;
+  padding: 14px 14px 10px;
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.02),
+    rgba(129, 140, 248, 0.04)
+  );
+  border-radius: 14px;
   max-height: 600px;
-  min-height: 400px;
+  min-height: 380px;
 }
 
 .empty-tip {
@@ -2302,8 +2343,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #999;
-  font-size: 6px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 /* 模型初始化进度 */
@@ -2372,8 +2413,8 @@ onUnmounted(() => {
 }
 
 .message-item {
-  margin-bottom: 11px;
-  animation: fadeIn 0.3s ease-in;
+  margin-bottom: 12px;
+  animation: fadeIn 0.24s ease-out;
   display: flex;
   width: 100%;
   box-sizing: border-box;
@@ -2418,14 +2459,14 @@ onUnmounted(() => {
 }
 
 .message-plaintiff .message-name {
-  font-size: 7px;
-  color: #999;
+  font-size: 11px;
+  color: #6b7280;
   margin-bottom: 3px;
 }
 
 .message-plaintiff .message-time {
-  font-size: 6px;
-  color: #999;
+  font-size: 10px;
+  color: #9ca3af;
   margin-top: 3px;
   align-self: flex-start;
 }
@@ -2434,7 +2475,7 @@ onUnmounted(() => {
   margin-left: 4px;
   color: #67c23a;
   font-weight: 500;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* 审判员：中间布局 */
@@ -2463,14 +2504,14 @@ onUnmounted(() => {
 }
 
 .message-name-center {
-  font-size: 7px;
-  color: #999;
+  font-size: 11px;
+  color: #6b7280;
   margin-bottom: 3px;
 }
 
 .message-time-center {
-  font-size: 6px;
-  color: #999;
+  font-size: 10px;
+  color: #9ca3af;
   margin-top: 3px;
 }
 
@@ -2509,15 +2550,15 @@ onUnmounted(() => {
 }
 
 .message-defendant-wrapper .message-name-right {
-  font-size: 7px;
-  color: #999;
+  font-size: 11px;
+  color: #6b7280;
   margin-bottom: 3px;
   text-align: right;
 }
 
 .message-defendant-wrapper .message-time-right {
-  font-size: 6px;
-  color: #999;
+  font-size: 10px;
+  color: #9ca3af;
   margin-top: 3px;
   text-align: right;
 }
@@ -2530,43 +2571,38 @@ onUnmounted(() => {
 
 /* 头像样式 */
 .avatar {
-  width: 23px;
-  height: 23px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   color: white;
   flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
 }
 
 .avatar-judge {
-  background: rgba(230, 162, 60, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(234, 179, 8, 0.9);
 }
 
 .avatar-plaintiff {
-  background: rgba(64, 158, 255, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(59, 130, 246, 0.9);
 }
 
 .avatar-defendant {
-  background: rgba(245, 108, 108, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(248, 113, 113, 0.9);
 }
 
 /* 消息气泡 */
 .message-bubble {
-  padding: 6px 8px;
-  border-radius: 5px;
-  font-size: 12px;
-  color: #333;
-  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
   word-wrap: break-word;
   position: relative;
   max-width: 100%;
@@ -2574,14 +2610,14 @@ onUnmounted(() => {
 }
 
 .message-bubble-left {
-  background: #95ec69;
-  border-radius: 5px 5px 5px 2px;
+  background: rgba(129, 140, 248, 0.12);
+  border-radius: 12px 12px 12px 4px;
   align-self: flex-start;
 }
 
 .message-bubble-center {
   background: #fff7e6;
-  border-radius: 5px;
+  border-radius: 10px;
   text-align: center;
   display: block;
   margin: 0 auto;
@@ -2589,9 +2625,9 @@ onUnmounted(() => {
 
 .message-bubble-right {
   background: #ffffff;
-  border-radius: 5px 5px 2px 5px;
+  border-radius: 12px 12px 4px 12px;
   align-self: flex-end;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
 }
 
 .message-text {
@@ -2690,9 +2726,9 @@ onUnmounted(() => {
 
 /* 用户输入区域 */
 .input-section {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
 }
 
 /* AI代理和策略选择 */
@@ -2700,8 +2736,8 @@ onUnmounted(() => {
   margin-bottom: 12px;
   padding: 12px;
   background: #f9fafb;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .ai-proxy-switch {
@@ -2717,7 +2753,7 @@ onUnmounted(() => {
 
 .strategy-label {
   font-size: 13px;
-  color: #606266;
+  color: #4b5563;
   font-weight: 500;
 }
 
@@ -2740,10 +2776,10 @@ onUnmounted(() => {
 
 /* 发言状态提示 */
 .speaking-status {
-  margin-bottom: 12px;
-  padding: 10px 15px;
-  border-radius: 6px;
-  background: #f5f7fa;
+  margin-bottom: 10px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.03);
   animation: fadeIn 0.3s ease-in;
 }
 
@@ -2769,11 +2805,11 @@ onUnmounted(() => {
 }
 
 .status-user-turn {
-  color: #409eff;
+  color: #6366f1;
 }
 
 .status-user-turn .status-text {
-  color: #409eff;
+  color: #6366f1;
 }
 
 .status-waiting {
@@ -2811,28 +2847,28 @@ onUnmounted(() => {
 /* 操作按钮 */
 .action-section {
   text-align: center;
-  padding: 20px 0;
+  padding: 16px 0 10px;
 }
 
 .start-btn,
 .generate-btn {
   width: 200px;
-  height: 50px;
-  font-size: 14px;
+  height: 48px;
+  font-size: 15px;
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: 999px;
 }
 
 .start-btn {
-  background: #409eff;
-  border-color: #409eff;
+  background: var(--primary-purple);
+  border-color: var(--primary-purple);
 }
 
 .start-btn:hover {
-  background: #66b1ff;
-  border-color: #66b1ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  background: #4f46e5;
+  border-color: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.35);
 }
 
 .start-btn:disabled {
@@ -2849,15 +2885,15 @@ onUnmounted(() => {
 }
 
 .generate-btn {
-  background: #07c160;
-  border-color: #07c160;
+  background: #16a34a;
+  border-color: #16a34a;
 }
 
 .generate-btn:hover {
-  background: #06ad56;
-  border-color: #06ad56;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+  background: #15803d;
+  border-color: #15803d;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(22, 163, 74, 0.3);
 }
 
 /* 辩论结束后的样式 */
@@ -2890,6 +2926,36 @@ onUnmounted(() => {
   color: #856404;
   font-weight: 500;
   line-height: 1.5;
+}
+
+/* 响应式微调：较窄屏幕上减小留白 */
+@media (max-width: 768px) {
+  .debate-info-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .debate-card {
+    border-radius: var(--radius-md);
+    box-shadow: none;
+  }
+
+  .identity-display-section,
+  .pretrial-materials-section,
+  .judge-display-section,
+  .strategy-display-section,
+  .debate-chat-section {
+    padding: 12px 12px;
+  }
+
+  .chat-container {
+    padding: 12px;
+    min-height: 320px;
+  }
+
+  .action-section {
+    padding: 14px 0 8px;
+  }
 }
 </style>
 
