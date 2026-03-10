@@ -1,9 +1,28 @@
 <template>
-  <div class="welcome-page" @click.self="() => {}">
+  <div class="welcome-page" @click="onBackgroundClick">
     <!-- 动态紫色背景 -->
     <div class="animated-background">
       <div class="bg-gradient"></div>
       <div class="bg-mesh"></div>
+      <!-- 水圈波纹层 -->
+      <div class="water-ripples" aria-hidden="true">
+        <div
+          v-for="r in waterRipples"
+          :key="r.id"
+          class="ripple"
+          :style="{
+            left: r.x + '%',
+            top: r.y + '%',
+            width: r.size + 'px',
+            height: r.size + 'px',
+            '--ripple-duration': r.duration + 's',
+            '--ripple-delay': r.delay + 's',
+            '--ripple-opacity': r.opacity,
+            '--ripple-stroke': r.stroke
+          }"
+          @animationend="removeRipple(r.id)"
+        />
+      </div>
       <div class="bg-particles">
         <div v-for="i in 12" :key="i" class="particle" :style="getParticleStyle(i)"></div>
       </div>
@@ -59,12 +78,57 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 
 const showLoginForm = ref(false)
 const showRegisterForm = ref(false)
+
+// 水圈波纹：随机生成，带物理感
+const waterRipples = ref([])
+let rippleId = 0
+let rippleTimer = null
+const MAX_RIPPLES = 20
+
+function addRipple(ev) {
+  if (waterRipples.value.length >= MAX_RIPPLES) return
+  const id = ++rippleId
+  const isClick = ev && ev instanceof MouseEvent
+  waterRipples.value.push({
+    id,
+    x: isClick ? (ev.clientX / window.innerWidth) * 100 : 8 + Math.random() * 84,
+    y: isClick ? (ev.clientY / window.innerHeight) * 100 : 12 + Math.random() * 76,
+    size: 50 + Math.random() * 180,
+    duration: 1.0 + Math.random() * 2.5,
+    delay: isClick ? 0 : Math.random() * 0.4,
+    opacity: 0.22 + Math.random() * 0.22,
+    stroke: 1.0 + Math.random() * 1.0
+  })
+}
+
+function onBackgroundClick(ev) {
+  if (ev.target.closest('button') || ev.target.closest('.modal-overlay') || ev.target.closest('a')) return
+  addRipple(ev)
+}
+
+function removeRipple(id) {
+  waterRipples.value = waterRipples.value.filter((r) => r.id !== id)
+}
+
+onMounted(() => {
+  addRipple()
+  addRipple()
+  addRipple()
+  addRipple()
+  rippleTimer = setInterval(() => {
+    addRipple()
+  }, 500 + Math.random() * 600)
+})
+
+onUnmounted(() => {
+  if (rippleTimer) clearInterval(rippleTimer)
+})
 
 const showLogin = () => {
   if (!showLoginForm.value && !showRegisterForm.value) {
@@ -158,6 +222,67 @@ const getParticleStyle = (index) => {
     radial-gradient(ellipse 60% 40% at 75% 85%, rgba(255,255,255,0.08) 0%, transparent 50%),
     radial-gradient(ellipse 50% 35% at 25% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
   pointer-events: none;
+}
+
+/* 水圈波纹：真实物理感（扩散 + 衰减） */
+.water-ripples {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  border: calc(var(--ripple-stroke, 1.5) * 1px) solid rgba(255, 255, 255, var(--ripple-opacity, 0.35));
+  box-shadow:
+    0 0 0 0 rgba(255, 255, 255, 0),
+    inset 0 0 12px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.4));
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 1;
+  animation: rippleExpand var(--ripple-duration, 2.8s) var(--ripple-delay, 0s) cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  will-change: transform, opacity, border-color, box-shadow;
+}
+
+.ripple::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.5));
+  opacity: 0;
+  animation: rippleRing 2.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes rippleExpand {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+    border-color: rgba(255, 255, 255, var(--ripple-opacity, 0.35));
+    box-shadow:
+      0 0 0 0 rgba(255, 255, 255, 0.12),
+      inset 0 0 12px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.5));
+  }
+  35% {
+    border-color: rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.9));
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+    border-color: rgba(255, 255, 255, 0);
+    box-shadow:
+      0 0 20px 2px rgba(255, 255, 255, 0),
+      inset 0 0 24px rgba(255, 255, 255, 0);
+  }
+}
+
+@keyframes rippleRing {
+  0% { transform: scale(0.5); opacity: 0.6; }
+  100% { transform: scale(1.1); opacity: 0; }
 }
 
 /* 极淡噪声纹理 */
