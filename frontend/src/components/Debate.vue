@@ -2146,23 +2146,23 @@ onUnmounted(() => {
 }
 
 .copy-debate-btn {
-  background: rgba(99, 102, 241, 0.06);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.5);
+  border-color: rgba(99, 102, 241, 0.7);
 }
 
 .copy-debate-btn:hover {
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 1);
+  border-color: rgba(99, 102, 241, 1);
 }
 
 .reset-debate-btn {
-  background: rgba(248, 113, 113, 0.04);
-  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.5);
+  border-color: rgba(248, 113, 113, 0.7);
 }
 
 .reset-debate-btn:hover {
-  background: rgba(248, 113, 113, 0.12);
-  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(248, 113, 113, 1);
+  border-color: rgba(248, 113, 113, 1);
 }
 
 /* 身份 / 材料 / 审判员 / 策略四块信息区：使用统一卡片视觉，无额外样式覆盖 */
@@ -2230,7 +2230,7 @@ onUnmounted(() => {
 .case-description {
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 200px;
+  max-height: 120px;
   overflow-y: auto;
   padding: 8px 10px;
   border-radius: 6px;
@@ -2313,27 +2313,24 @@ onUnmounted(() => {
 
 /* 庭审对话区域 */
 .debate-chat-section {
-  background: rgba(248, 250, 252, 0.92);
-  border-radius: 20px;
+  background: #f9fafb;
+  border-radius: 18px;
   padding: 18px 18px 14px;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 400px;
   border: 1px solid rgba(148, 163, 253, 0.16);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.09);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
 }
 
 .chat-container {
   flex: 1;
   overflow-y: auto;
   padding: 14px 14px 10px;
-  background: linear-gradient(
-    135deg,
-    rgba(15, 23, 42, 0.02),
-    rgba(129, 140, 248, 0.04)
-  );
+  background: #f3f4f6;
   border-radius: 14px;
+  border: 1px solid rgba(148, 163, 253, 0.12);
   max-height: 600px;
   min-height: 380px;
 }
@@ -2581,7 +2578,8 @@ onUnmounted(() => {
   font-weight: 600;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .avatar-judge {
@@ -2627,7 +2625,7 @@ onUnmounted(() => {
   background: #ffffff;
   border-radius: 12px 12px 4px 12px;
   align-self: flex-end;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
 }
 
 .message-text {
