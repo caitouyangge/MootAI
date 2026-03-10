@@ -49,19 +49,25 @@ function addRipple(ev) {
   if (!props.enableRipples) return
   if (waterRipples.value.length >= MAX_RIPPLES) return
   const id = ++rippleId
-  const isClick = ev && ev instanceof MouseEvent
-  const baseOpacity = isClick ? 0.42 : 0.26
+  const isClick = !!ev && typeof ev.clientX === 'number' && typeof ev.clientY === 'number'
+  // 样式统一为“点击生成”的水波参数
+  const baseOpacity = 0.42
   const randOpacity = 0.18
-  const baseStroke = isClick ? 1.7 : 1.2
-  const randStroke = isClick ? 1.1 : 0.9
+  const baseStroke = 1.7
+  const randStroke = 1.1
   const baseSize = isClick ? 90 : 60
   const randSize = isClick ? 260 : 200
+  const size = baseSize + Math.random() * randSize
+  // 越大的水波纹扩散越慢：点击与随机共用同一规律，仅由 size 决定 duration
+  const sizeFactor = Math.min(Math.max(size / 260, 0.6), 2)
+  const duration = 1.0 + 1.2 * sizeFactor + Math.random() * 0.5
+
   waterRipples.value.push({
     id,
     x: isClick ? (ev.clientX / window.innerWidth) * 100 : 8 + Math.random() * 84,
     y: isClick ? (ev.clientY / window.innerHeight) * 100 : 12 + Math.random() * 76,
-    size: baseSize + Math.random() * randSize,
-    duration: (isClick ? 1.35 : 1.1) + Math.random() * 2.2,
+    size,
+    duration,
     delay: isClick ? 0 : Math.random() * 0.4,
     opacity: baseOpacity + Math.random() * randOpacity,
     stroke: baseStroke + Math.random() * randStroke
@@ -84,6 +90,13 @@ function onRootClick(ev) {
   addRipple(ev)
 }
 
+function onRequestRipple(e) {
+  if (!props.enableRipples || !props.clickToRipple) return
+  const { clientX, clientY } = e.detail || {}
+  if (typeof clientX !== 'number' || typeof clientY !== 'number') return
+  addRipple({ clientX, clientY })
+}
+
 onMounted(() => {
   if (!props.enableRipples) return
   addRipple()
@@ -93,10 +106,12 @@ onMounted(() => {
   rippleTimer = setInterval(() => {
     addRipple()
   }, 500 + Math.random() * 600)
+  window.addEventListener('request-ripple', onRequestRipple)
 })
 
 onUnmounted(() => {
   if (rippleTimer) clearInterval(rippleTimer)
+  window.removeEventListener('request-ripple', onRequestRipple)
 })
 
 const getParticleStyle = () => {

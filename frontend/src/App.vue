@@ -1,6 +1,16 @@
 <script setup>
 import { RouterView } from 'vue-router'
 import AnimatedBackground from '@/components/AnimatedBackground.vue'
+
+// 点击内容层空白区域时，派发事件让背景在点击位置生成水波纹（内容层盖住了背景，背景收不到点击）
+const RIPPLE_IGNORE = 'button, a, input, select, textarea, [contenteditable], .el-button, .el-dialog, .el-message-box, .el-select-dropdown, .menu-item, .logout-btn, .login-btn'
+
+function onAppMainClick(ev) {
+  if (ev.target.closest(RIPPLE_IGNORE)) return
+  window.dispatchEvent(new CustomEvent('request-ripple', {
+    detail: { clientX: ev.clientX, clientY: ev.clientY }
+  }))
+}
 </script>
 
 <template>
@@ -12,8 +22,8 @@ import AnimatedBackground from '@/components/AnimatedBackground.vue'
       :click-to-ripple="true"
     />
 
-    <!-- 路由内容层：在背景之上做转场 -->
-    <div class="app-main">
+    <!-- 路由内容层：在背景之上做转场；点击空白区域会派发 request-ripple 让背景出水波纹 -->
+    <div class="app-main" @click="onAppMainClick">
       <router-view v-slot="{ Component, route }">
         <transition name="page-fade" mode="out-in">
           <component :is="Component" :key="route.path" />
