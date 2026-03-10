@@ -831,9 +831,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  background: var(--bg-overlay);
   border-radius: var(--radius-md);
   border-left: 4px solid var(--primary-purple);
+  border: 1px solid rgba(6, 182, 212, 0.18);
+  border-left-width: 4px;
   margin-bottom: 16px;
 }
 

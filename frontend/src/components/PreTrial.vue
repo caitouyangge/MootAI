@@ -1,252 +1,310 @@
 <template>
   <div class="pretrial-container">
-    <!-- 步骤导航 -->
+
+    <!-- ── 步骤导航 Stepper ── -->
     <div class="steps-nav">
-      <div
-        v-for="(step, index) in steps"
-        :key="step.key"
-        class="step-item"
-        :class="{
-          'active': currentStep === step.key,
-          'completed': stepStatus[step.key],
-          'disabled': !canAccessStep(step.key)
-        }"
-        @click="navigateToStep(step.key)"
-      >
-        <div class="step-number">
-          <span v-if="stepStatus[step.key]" class="step-check">✓</span>
-          <span v-else>{{ index + 1 }}</span>
+      <div class="steps-track">
+        <div
+          v-for="(step, index) in steps"
+          :key="step.key"
+          class="step-item"
+          :class="{
+            'active':    currentStep === step.key,
+            'completed': stepStatus[step.key] && currentStep !== step.key,
+            'disabled':  !canAccessStep(step.key)
+          }"
+          @click="navigateToStep(step.key)"
+        >
+          <div class="step-circle">
+            <!-- 未解锁：锁图标 -->
+            <svg v-if="!canAccessStep(step.key)" class="step-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/>
+            </svg>
+            <!-- 已完成：勾选图标 -->
+            <svg v-else-if="stepStatus[step.key] && currentStep !== step.key" class="step-icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+            <!-- 当前/可访问：数字 -->
+            <span v-else class="step-num">{{ index + 1 }}</span>
+          </div>
+          <div class="step-label">{{ step.label }}</div>
         </div>
-        <div class="step-label">{{ step.label }}</div>
-        <div v-if="!canAccessStep(step.key)" class="step-lock">🔒</div>
       </div>
     </div>
 
-    <!-- 内容区域 -->
+    <!-- ── 步骤内容区域（带淡入切换） ── -->
     <div class="content-area">
-      <!-- 步骤1：选择身份 -->
-      <div v-if="currentStep === 'identity'" class="step-content">
-        <div class="step-header">
-          <h3 class="step-title">步骤1：选择身份</h3>
-          <p class="step-desc">请选择您在本次模拟中的身份角色</p>
-        </div>
-        <div class="identity-selector">
-          <div
-            class="identity-option"
-            :class="{ 'active': selectedIdentity === 'plaintiff' }"
-            @click="selectIdentity('plaintiff')"
-          >
-            <div class="option-icon">👨‍⚖️</div>
-            <div class="option-label">公诉人</div>
-            <div class="option-desc">提起诉讼的一方</div>
-          </div>
-          <div
-            class="identity-option"
-            :class="{ 'active': selectedIdentity === 'defendant' }"
-            @click="selectIdentity('defendant')"
-          >
-            <div class="option-icon">⚖️</div>
-            <div class="option-label">辩护人</div>
-            <div class="option-desc">被起诉的一方</div>
-          </div>
-        </div>
-        <div v-if="selectedIdentity" class="step-actions">
-          <el-button type="primary" @click="completeStep('identity')">
-            确认并继续
-          </el-button>
-        </div>
-      </div>
+      <Transition name="step-fade" mode="out-in">
+        <div :key="currentStep" class="step-content">
 
-      <!-- 步骤2：上传案件资料 -->
-      <div v-else-if="currentStep === 'upload'" class="step-content">
-        <div class="step-header">
-          <h3 class="step-title">步骤2：上传案件资料</h3>
-          <p class="step-desc">请上传与案件相关的文件资料</p>
-        </div>
-        <div class="upload-section">
-          <div 
-            class="upload-area" 
-            @click="triggerUpload" 
-            @drop.prevent="handleDrop"
-            @dragover.prevent="handleDragOver"
-            @dragenter.prevent="handleDragEnter"
-            @dragleave.prevent="handleDragLeave"
-            :class="{ 
-              'has-files': fileList.length > 0,
-              'dragging': isDragging
-            }"
-          >
-            <input
-              ref="fileInput"
-              type="file"
-              multiple
-              style="display: none"
-              @change="handleFileChange"
-            />
-            <div v-if="fileList.length === 0" class="upload-placeholder">
-              <div class="upload-icon">📤</div>
-              <p class="upload-text">点击或拖拽文件到此处上传</p>
-              <p class="upload-hint">支持多个文件同时上传</p>
+          <!-- 步骤 1：选择身份 -->
+          <template v-if="currentStep === 'identity'">
+            <div class="step-header">
+              <h3 class="step-title">选择您的身份</h3>
+              <p class="step-desc">请选择您在本次模拟庭审中担任的角色</p>
             </div>
-            <div v-else class="file-preview">
-              <div class="file-count">{{ fileList.length }} 个文件</div>
-              <div class="file-list">
+            <div class="identity-selector">
+              <div
+                class="identity-option"
+                :class="{ active: selectedIdentity === 'plaintiff' }"
+                @click="selectIdentity('plaintiff')"
+              >
+                <div class="option-icon-wrap">
+                  <!-- 公诉人：文书/卷宗图标 -->
+                  <svg viewBox="0 0 24 24" class="option-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+                  </svg>
+                </div>
+                <div class="option-label">公诉人</div>
+                <div class="option-desc">代表国家向被告提起诉讼</div>
+                <div class="option-check">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+              <div
+                class="identity-option"
+                :class="{ active: selectedIdentity === 'defendant' }"
+                @click="selectIdentity('defendant')"
+              >
+                <div class="option-icon-wrap">
+                  <!-- 辩护人：盾牌图标 -->
+                  <svg viewBox="0 0 24 24" class="option-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+                  </svg>
+                </div>
+                <div class="option-label">辩护人</div>
+                <div class="option-desc">为被告提供法律辩护</div>
+                <div class="option-check">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div v-if="selectedIdentity" class="step-actions">
+              <el-button type="primary" size="large" @click="completeStep('identity')">
+                确认并继续
+              </el-button>
+            </div>
+          </template>
+
+          <!-- 步骤 2：上传案件资料 -->
+          <template v-else-if="currentStep === 'upload'">
+            <div class="step-header">
+              <h3 class="step-title">上传案件资料</h3>
+              <p class="step-desc">请上传与案件相关的文件资料，支持多个文件</p>
+            </div>
+            <div class="upload-section">
+              <div
+                class="upload-area"
+                @click="triggerUpload"
+                @drop.prevent="handleDrop"
+                @dragover.prevent="handleDragOver"
+                @dragenter.prevent="handleDragEnter"
+                @dragleave.prevent="handleDragLeave"
+                :class="{ 'has-files': fileList.length > 0, 'dragging': isDragging }"
+              >
+                <input ref="fileInput" type="file" multiple style="display:none" @change="handleFileChange"/>
+
+                <!-- 空状态占位 -->
+                <div v-if="fileList.length === 0" class="upload-placeholder">
+                  <div class="upload-icon-wrap" :class="{ 'is-dragging': isDragging }">
+                    <svg viewBox="0 0 24 24" class="upload-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                    </svg>
+                  </div>
+                  <p class="upload-text">{{ isDragging ? '松开即可上传' : '点击或拖拽文件到此处上传' }}</p>
+                  <p class="upload-hint">支持 PDF、Word、TXT 等多种格式</p>
+                </div>
+
+                <!-- 文件列表 -->
+                <div v-else class="file-preview">
+                  <div class="file-count-row">
+                    <svg viewBox="0 0 20 20" fill="currentColor" class="file-count-icon">
+                      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>已选择 {{ fileList.length }} 个文件</span>
+                  </div>
+                  <div class="file-list">
+                    <div
+                      v-for="(file, index) in fileList"
+                      :key="index"
+                      class="file-tag"
+                      :class="{ uploading: file.uploading, uploaded: file.uploaded }"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" class="file-tag-icon">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
+                      </svg>
+                      <span class="file-name">{{ file.name }}</span>
+                      <span v-if="file.uploading" class="upload-status-text">上传中…</span>
+                      <svg v-else-if="file.uploaded" viewBox="0 0 20 20" fill="currentColor" class="upload-ok-icon">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                      </svg>
+                      <button class="remove-btn" @click.stop="removeFile(index)">
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="remove-icon">
+                          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button v-if="fileList.length > 0" class="clear-btn" @click="clearAllFiles">清空所有文件</button>
+            </div>
+            <div v-if="fileList.length > 0" class="step-actions">
+              <el-button type="primary" size="large" @click="completeStep('upload')">确认并继续</el-button>
+            </div>
+          </template>
+
+          <!-- 步骤 3：生成案件描述 -->
+          <template v-else-if="currentStep === 'description'">
+            <div class="step-header">
+              <h3 class="step-title">生成案件描述</h3>
+              <p class="step-desc">AI 将根据您上传的材料自动生成案件描述，您也可以手动编辑</p>
+            </div>
+            <div class="description-section">
+              <!-- 生成按钮 -->
+              <button
+                v-if="!caseDescription"
+                class="generate-btn"
+                :class="{ loading: generating }"
+                :disabled="generating"
+                @click="generateDescription"
+              >
+                <svg v-if="!generating" viewBox="0 0 24 24" class="gen-icon" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/>
+                </svg>
+                <span class="gen-spinner" v-if="generating"></span>
+                <span>{{ generating ? '正在分析案卷…' : '生成案件描述' }}</span>
+              </button>
+              <!-- 骨架屏加载 -->
+              <div v-if="generating" class="desc-skeleton">
+                <div class="sk-line sk-long"></div>
+                <div class="sk-line sk-mid"></div>
+                <div class="sk-line sk-short"></div>
+                <div class="sk-line sk-long"></div>
+                <div class="sk-line sk-mid"></div>
+                <div class="sk-line sk-short"></div>
+              </div>
+              <!-- 描述内容 -->
+              <div v-if="caseDescription" class="description-content">
+                <el-input
+                  v-model="caseDescription"
+                  type="textarea"
+                  :autosize="{ minRows: 10, maxRows: 20 }"
+                  placeholder="案件描述将由系统自动生成…"
+                  class="description-input"
+                />
+                <div class="description-tip">
+                  <svg viewBox="0 0 20 20" fill="currentColor" class="tip-svg">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                  </svg>
+                  <span>您可以对上述内容进行编辑和调整</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="caseDescription" class="step-actions">
+              <el-button type="primary" size="large" @click="completeStep('description')">确认并继续</el-button>
+            </div>
+          </template>
+
+          <!-- 步骤 4：选择审判员类型（卡片化） -->
+          <template v-else-if="currentStep === 'judge'">
+            <div class="step-header">
+              <h3 class="step-title">选择审判员类型</h3>
+              <p class="step-desc">请选择在本次模拟庭审中主持的审判员风格</p>
+            </div>
+            <div class="judge-select-section">
+              <div class="judge-grid">
                 <div
-                  v-for="(file, index) in fileList"
-                  :key="index"
-                  class="file-tag"
-                  :class="{ 'uploading': file.uploading, 'uploaded': file.uploaded }"
+                  v-for="judge in judgeTypes"
+                  :key="judge.value"
+                  class="judge-card"
+                  :class="{ active: selectedJudgeType === judge.value }"
+                  @click="selectedJudgeType = judge.value; onJudgeTypeChange()"
                 >
-                  <span class="file-icon">📄</span>
-                  <span class="file-name">{{ file.name }}</span>
-                  <span v-if="file.uploading" class="upload-status">上传中...</span>
-                  <span v-else-if="file.uploaded" class="upload-status">✓</span>
-                  <el-button
-                    text
-                    size="small"
-                    @click.stop="removeFile(index)"
-                    class="remove-btn"
-                  >
-                    ×
-                  </el-button>
+                  <div class="judge-card-label">{{ judge.label }}</div>
+                  <div class="judge-card-desc">{{ judge.description }}</div>
+                  <div class="judge-check">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <el-button
-            v-if="fileList.length > 0"
-            text
-            size="small"
-            @click="clearAllFiles"
-            class="clear-btn"
-          >
-            清空所有文件
-          </el-button>
-        </div>
-        <div v-if="fileList.length > 0" class="step-actions">
-          <el-button type="primary" @click="completeStep('upload')">
-            确认并继续
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 步骤3：生成案件描述 -->
-      <div v-else-if="currentStep === 'description'" class="step-content">
-        <div class="step-header">
-          <h3 class="step-title">步骤3：生成案件描述</h3>
-          <p class="step-desc">系统将基于您上传的文件自动生成案件描述</p>
-        </div>
-        <div class="description-section">
-          <el-button
-            v-if="!caseDescription"
-            type="primary"
-            :loading="generating"
-            @click="generateDescription"
-            class="generate-btn"
-          >
-            <span v-if="!generating">🤖 生成案件描述</span>
-            <span v-else>正在生成中...</span>
-          </el-button>
-          <div v-if="caseDescription" class="description-content">
-            <el-input
-              v-model="caseDescription"
-              type="textarea"
-              :autosize="{ minRows: 10, maxRows: 20 }"
-              placeholder="案件描述将由系统自动生成..."
-              class="description-input"
-            />
-            <div class="description-tip">
-              <span class="tip-icon">💡</span>
-              <span>您可以编辑上述内容进行调整</span>
+            <div v-if="selectedJudgeType" class="step-actions">
+              <el-button type="primary" size="large" @click="completeStep('judge')">确认并继续</el-button>
             </div>
-          </div>
-        </div>
-        <div v-if="caseDescription" class="step-actions">
-          <el-button type="primary" @click="completeStep('description')">
-            确认并继续
-          </el-button>
-        </div>
-      </div>
+          </template>
 
-      <!-- 步骤4：选择审判员类型 -->
-      <div v-else-if="currentStep === 'judge'" class="step-content">
-        <div class="step-header">
-          <h3 class="step-title">步骤4：选择审判员类型</h3>
-          <p class="step-desc">请选择本次模拟庭审的审判员类型</p>
-        </div>
-        <div class="judge-select-section">
-          <el-select
-            v-model="selectedJudgeType"
-            placeholder="请选择审判员类型"
-            class="judge-select"
-            @change="onJudgeTypeChange"
-          >
-            <el-option
-              v-for="judge in judgeTypes"
-              :key="judge.value"
-              :label="judge.label"
-              :value="judge.value"
-            >
-              <div class="judge-option">
-                <span class="judge-name">{{ judge.label }}</span>
-                <span class="judge-desc">：{{ judge.description }}</span>
-              </div>
-            </el-option>
-          </el-select>
-          <div v-if="selectedJudgeType" class="judge-preview">
-            <div class="preview-title">已选择：{{ getJudgeLabel(selectedJudgeType) }}</div>
-            <div class="preview-desc">{{ getJudgeDescription(selectedJudgeType) }}</div>
-          </div>
-        </div>
-        <div v-if="selectedJudgeType" class="step-actions">
-          <el-button type="primary" @click="completeStep('judge')">
-            确认并继续
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 步骤5：选择对方AI律师的辩论策略 -->
-      <div v-else-if="currentStep === 'strategy'" class="step-content">
-        <div class="step-header">
-          <h3 class="step-title">步骤5：选择对方AI律师的辩论策略</h3>
-          <p class="step-desc">请选择对方AI律师在庭审中的辩论策略</p>
-        </div>
-        <div class="strategy-select-section">
-          <div class="strategy-options">
-            <div
-              v-for="strategy in strategyOptions"
-              :key="strategy.value"
-              class="strategy-option"
-              :class="{ 'active': selectedOpponentStrategy === strategy.value }"
-              @click="selectStrategy(strategy.value)"
-            >
-              <div class="strategy-option-header">
-                <div class="strategy-icon">{{ strategy.icon }}</div>
-                <div class="strategy-title">{{ strategy.label }}</div>
-              </div>
-              <div class="strategy-description">{{ strategy.description }}</div>
-              <div class="strategy-features">
-                <div v-for="feature in strategy.features" :key="feature" class="strategy-feature">
-                  • {{ feature }}
+          <!-- 步骤 5：选择对方 AI 律师辩论策略 -->
+          <template v-else-if="currentStep === 'strategy'">
+            <div class="step-header">
+              <h3 class="step-title">选择对方辩论策略</h3>
+              <p class="step-desc">请选择对方 AI 律师在庭审中采用的辩论策略风格</p>
+            </div>
+            <div class="strategy-select-section">
+              <div class="strategy-options">
+                <div
+                  v-for="strategy in strategyOptions"
+                  :key="strategy.value"
+                  class="strategy-option"
+                  :class="{ active: selectedOpponentStrategy === strategy.value }"
+                  @click="selectStrategy(strategy.value)"
+                >
+                  <div class="strategy-option-header">
+                    <div class="strategy-icon-wrap">
+                      <!-- 激进：五角星/冲锋 -->
+                      <svg v-if="strategy.value === 'aggressive'" viewBox="0 0 24 24" class="strategy-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+                      </svg>
+                      <!-- 保守：盾牌勾 -->
+                      <svg v-else-if="strategy.value === 'conservative'" viewBox="0 0 24 24" class="strategy-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+                      </svg>
+                      <!-- 均衡：天平 -->
+                      <svg v-else-if="strategy.value === 'balanced'" viewBox="0 0 24 24" class="strategy-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.521m0 0l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 01-2.031.352 5.989 5.989 0 01-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z"/>
+                      </svg>
+                      <!-- 防御：纯盾牌 -->
+                      <svg v-else viewBox="0 0 24 24" class="strategy-svg" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                      </svg>
+                    </div>
+                    <div class="strategy-title-text">{{ strategy.label }}</div>
+                  </div>
+                  <div class="strategy-description">{{ strategy.description }}</div>
+                  <div class="strategy-features">
+                    <div v-for="feature in strategy.features" :key="feature" class="strategy-feature">
+                      <span class="feature-dot"></span>{{ feature }}
+                    </div>
+                  </div>
+                  <div class="strategy-check">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div v-if="selectedOpponentStrategy" class="step-actions">
-          <el-button type="primary" @click="completeStep('strategy')">
-            确认并继续
-          </el-button>
-        </div>
-      </div>
+            <div v-if="selectedOpponentStrategy" class="step-actions">
+              <el-button type="primary" size="large" @click="completeStep('strategy')">开始庭审</el-button>
+            </div>
+          </template>
 
+        </div>
+      </Transition>
     </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, computed } from 'vue'
-import { ElMessage, ElButton, ElInput, ElSelect, ElOption } from 'element-plus'
+import { ElMessage, ElButton, ElInput } from 'element-plus'
 import { useCaseStore } from '@/stores/case'
 import request from '@/utils/request'
 
@@ -954,21 +1012,43 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* =============================================
+   PreTrial — 重构样式（全站 CSS 变量）
+   ============================================= */
+
+/* ── 容器 ── */
 .pretrial-container {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-xl);
 }
 
-/* 步骤导航 */
+/* ─────────────── Stepper 步骤导航 ─────────────── */
 .steps-nav {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.steps-track {
   display: flex;
-  gap: 8px;
-  background: #f5f7fa;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
+  align-items: flex-start;
+  position: relative;
+}
+
+/* 连接线（灰色底线） */
+.steps-track::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--border-color);
+  z-index: 0;
 }
 
 .step-item {
@@ -977,183 +1057,292 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 12px 8px;
-  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s;
   position: relative;
-  min-width: 100px;
-}
-
-.step-item:hover:not(.disabled) {
-  background: #ecf5ff;
-}
-
-.step-item.active {
-  background: #409eff;
-  color: white;
-}
-
-.step-item.completed {
-  background: #67c23a;
-  color: white;
+  z-index: 1;
+  transition: opacity var(--transition-base);
+  padding: 0 4px;
 }
 
 .step-item.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.step-number {
+/* 圆形节点 */
+.step-circle {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: white;
-  color: #409eff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-base);
+  /* 默认：可访问未激活 */
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  box-shadow: none;
 }
 
-.step-item.active .step-number,
-.step-item.completed .step-number {
-  background: rgba(255, 255, 255, 0.3);
-  color: white;
+.step-item.active .step-circle {
+  background: var(--primary-purple);
+  border-color: var(--primary-purple);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--bg-overlay);
 }
 
-.step-check {
-  font-size: 18px;
+.step-item.completed .step-circle {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #fff;
+}
+
+.step-item.disabled .step-circle {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+  color: var(--text-tertiary);
+}
+
+.step-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.step-num {
+  font-size: var(--font-size-sm);
+  line-height: 1;
 }
 
 .step-label {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
+  color: var(--text-secondary);
   text-align: center;
+  white-space: nowrap;
+  transition: color var(--transition-base);
 }
 
-.step-lock {
-  font-size: 12px;
-  margin-top: 4px;
+.step-item.active .step-label {
+  color: var(--primary-purple);
+  font-weight: 600;
 }
 
-/* 内容区域 */
+.step-item.completed .step-label {
+  color: var(--accent-green);
+}
+
+/* ─────────────── 内容区域过渡 ─────────────── */
 .content-area {
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
+  min-height: 280px;
+}
+
+/* step-fade 过渡动画 */
+.step-fade-enter-active,
+.step-fade-leave-active {
+  transition: opacity var(--transition-base) ease,
+              transform var(--transition-base) ease;
+}
+
+.step-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.step-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .step-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-xl);
 }
 
+/* ─────────────── 通用步骤标题 ─────────────── */
 .step-header {
   text-align: center;
-  margin-bottom: 20px;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .step-title {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-  margin: 0 0 8px 0;
+  font-family: var(--font-heading);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+  letter-spacing: -0.02em;
 }
 
 .step-desc {
-  font-size: 14px;
-  color: #666;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
   margin: 0;
 }
 
-/* 身份选择 */
+/* ─────────────── 步骤操作按钮 ─────────────── */
+.step-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--spacing-md);
+}
+
+.step-actions .el-button {
+  min-width: 160px;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ─────────────── 身份选择卡片 ─────────────── */
 .identity-selector {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin: 20px 0;
+  gap: var(--spacing-lg);
 }
 
 .identity-option {
-  padding: 24px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  position: relative;
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-xl);
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s;
-  background: white;
+  background: var(--bg-primary);
+  transition: all var(--transition-hover);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+.identity-option::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  opacity: 0;
+  transition: opacity var(--transition-hover);
+  pointer-events: none;
 }
 
 .identity-option:hover {
-  border-color: #409eff;
+  border-color: var(--primary-purple-light);
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.identity-option:hover::before {
+  opacity: 1;
 }
 
 .identity-option.active {
-  border-color: #409eff;
-  background: #ecf5ff;
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+  border-color: var(--primary-purple);
+  background: var(--primary-purple-lightest);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15), var(--shadow-card);
 }
 
-.option-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+.option-icon-wrap {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--spacing-lg);
+  border-radius: var(--radius-xl);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-hover);
+}
+
+.identity-option.active .option-icon-wrap {
+  background: var(--bg-overlay);
+}
+
+.option-svg {
+  width: 32px;
+  height: 32px;
+  color: var(--primary-purple);
 }
 
 .option-label {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
 }
 
 .option-desc {
-  font-size: 14px;
-  color: #666;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
-/* 文件上传 */
+/* 选中状态勾图标 */
+.option-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  color: var(--accent-green);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: all var(--transition-base);
+}
+
+.identity-option.active .option-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ─────────────── 上传区域 ─────────────── */
 .upload-section {
-  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 .upload-area {
-  min-height: 200px;
-  border: 2px dashed #e0e0e0;
-  border-radius: 12px;
-  padding: 40px;
+  min-height: 180px;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-2xl) var(--spacing-xl);
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s;
-  background: #fafafa;
-  margin-bottom: 12px;
+  transition: all var(--transition-base);
+  background: var(--bg-primary);
   position: relative;
-  /* 确保可以接收拖拽事件 */
   pointer-events: auto;
   user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .upload-area:hover {
-  border-color: #409eff;
-  background: #f0f9ff;
+  border-color: var(--primary-purple-light);
+  background: var(--bg-tertiary);
 }
 
 .upload-area.dragging {
-  border-color: #409eff;
-  background: #e6f7ff;
+  border-color: var(--primary-purple);
   border-style: solid;
+  background: var(--primary-purple-lightest);
+  transform: scale(1.01);
 }
 
 .upload-area.has-files {
   border-style: solid;
-  border-color: #409eff;
-  background: white;
-  padding: 24px;
+  border-color: var(--primary-purple-light);
+  background: var(--bg-primary);
+  padding: var(--spacing-xl);
   min-height: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 
 .upload-placeholder {
@@ -1161,393 +1350,465 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  pointer-events: none; /* 占位符不拦截事件 */
+  pointer-events: none;
 }
 
-.upload-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-  opacity: 0.6;
+.upload-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+  transition: all var(--transition-base);
+}
+
+.upload-icon-wrap.is-dragging {
+  background: var(--bg-overlay);
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+.upload-svg {
+  width: 32px;
+  height: 32px;
+  color: var(--primary-purple);
 }
 
 .upload-text {
-  font-size: 16px;
-  color: #333;
-  margin: 0 0 8px 0;
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
 }
 
 .upload-hint {
-  font-size: 14px;
-  color: #999;
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
   margin: 0;
 }
 
+/* 文件预览列表 */
 .file-preview {
   width: 100%;
-  pointer-events: none; /* 文件预览不拦截拖拽事件 */
+  pointer-events: none;
 }
 
-.file-count {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 12px;
-  font-weight: 500;
+.file-count-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--primary-purple);
+  margin-bottom: var(--spacing-md);
+}
+
+.file-count-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .file-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-sm);
+  pointer-events: auto;
 }
 
 .file-tag {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f5f7fa;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
+  gap: var(--spacing-xs);
+  padding: 6px var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-fast);
 }
 
 .file-tag.uploading {
-  background: #fff7e6;
-  border-color: #ffc53d;
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.4);
 }
 
 .file-tag.uploaded {
-  background: #f6ffed;
-  border-color: #95de64;
+  background: var(--accent-green-soft);
+  border-color: rgba(34, 197, 94, 0.35);
 }
 
-.upload-status {
-  font-size: 12px;
-  color: #666;
-  margin-left: 4px;
-}
-
-.file-icon {
-  font-size: 16px;
+.file-tag-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .file-name {
-  color: #333;
+  color: var(--text-primary);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--font-size-sm);
+}
+
+.upload-status-text {
+  font-size: var(--font-size-xs);
+  color: #ca8a04;
+}
+
+.upload-ok-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-green);
+  flex-shrink: 0;
 }
 
 .remove-btn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
   padding: 0;
-  min-width: auto;
-  width: 20px;
-  height: 20px;
-  color: #999;
-  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
 }
 
 .remove-btn:hover {
-  color: #f56c6c;
+  color: #ef4444;
+}
+
+.remove-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .clear-btn {
-  color: #999;
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color var(--transition-fast);
 }
 
 .clear-btn:hover {
-  color: #f56c6c;
+  color: #ef4444;
 }
 
-/* 案件描述 */
+/* ─────────────── 描述生成 ─────────────── */
 .description-section {
-  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
 }
 
 .generate-btn {
   width: 100%;
-  height: 48px;
-  font-size: 16px;
-  margin-bottom: 20px;
+  height: 52px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--primary-purple);
+  color: #fff;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  font-family: var(--font-heading);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-hover);
+  letter-spacing: 0.02em;
 }
 
+.generate-btn:hover:not(:disabled) {
+  background: var(--primary-purple-dark);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.generate-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.gen-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* 旋转加载 spinner */
+.gen-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 骨架屏 */
+.desc-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--spacing-xl);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+}
+
+.sk-line {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--border-color) 25%, var(--bg-primary) 50%, var(--border-color) 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.sk-long  { width: 100%; }
+.sk-mid   { width: 75%; }
+.sk-short { width: 55%; }
+
 .description-content {
-  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 .description-input {
   width: 100%;
-  margin-bottom: 12px;
 }
 
 .description-tip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #f0f9ff;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #409eff;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--bg-overlay);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--primary-purple);
+  border: 1px solid rgba(6, 182, 212, 0.2);
 }
 
-.tip-icon {
-  font-size: 16px;
+.tip-svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
-/* 步骤操作按钮 */
-.step-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 30px;
-}
-
-.step-actions .el-button {
-  min-width: 150px;
-  height: 40px;
-  font-size: 16px;
-}
-
-/* 子导航 */
-.sub-nav-tabs {
-  display: flex;
-  gap: 8px;
-  background: #f5f7fa;
-  padding: 8px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.sub-nav-btn {
-  flex: 1;
-  height: 32px;
-  font-size: 12px;
-  border-radius: 6px;
-}
-
-.sub-nav-btn.active {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
-  border-color: #409eff;
-  color: white;
-}
-
-/* 统一模块样式 */
-.unified-section {
+/* ─────────────── 审判员卡片 ─────────────── */
+.judge-select-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-lg);
 }
 
-/* 基本信息 */
-.info-item {
-  background: #f5f7fa;
-  border-radius: 6px;
-  padding: 12px;
-  border-left: 3px solid #409eff;
-  transition: all 0.3s;
+.judge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
 }
 
-.info-item:hover {
-  background: #ecf5ff;
-  transform: translateX(3px);
+.judge-card {
+  position: relative;
+  padding: var(--spacing-lg) var(--spacing-md);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  background: var(--bg-primary);
+  transition: all var(--transition-hover);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
 }
 
-.info-title {
-  font-size: 12px;
-  color: #409eff;
-  margin: 0 0 8px 0;
-  font-weight: 600;
+.judge-card:hover {
+  border-color: var(--primary-purple-light);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
 }
 
-.info-content {
-  font-size: 12px;
-  color: #606266;
-  line-height: 1.6;
-  white-space: pre-line;
+.judge-card.active {
+  border-color: var(--primary-purple);
+  background: var(--primary-purple-lightest);
+  box-shadow: 0 0 0 2px rgba(6,182,212,0.15), var(--shadow-card);
 }
 
-/* 诉讼策略 */
-.strategy-item {
-  border-radius: 6px;
-  padding: 12px;
-  border-top: 3px solid;
-  transition: all 0.3s;
+.judge-card-label {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
 }
 
-.strategy-aggressive {
-  background: #fee;
-  border-top-color: #f56c6c;
+.judge-card.active .judge-card-label {
+  color: var(--primary-purple-dark);
 }
 
-.strategy-conservative {
-  background: #fffbeb;
-  border-top-color: #e6a23c;
+.judge-card-desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
-.strategy-balanced {
-  background: #f5f7fa;
-  border-top-color: #67c23a;
+.judge-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  color: var(--accent-green);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all var(--transition-base);
 }
 
-.strategy-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.judge-card.active .judge-check {
+  opacity: 1;
+  transform: scale(1);
 }
 
-.strategy-title {
-  font-size: 12px;
-  margin: 0 0 8px 0;
-  font-weight: 600;
-}
-
-.strategy-aggressive .strategy-title {
-  color: #f56c6c;
-}
-
-.strategy-conservative .strategy-title {
-  color: #e6a23c;
-}
-
-.strategy-balanced .strategy-title {
-  color: #67c23a;
-}
-
-.strategy-content {
-  font-size: 12px;
-  color: #606266;
-  line-height: 1.6;
-  white-space: pre-line;
-}
-
-/* 审判员类型选择 */
-.judge-select-section {
-  margin: 20px 0;
-}
-
-.judge-select {
-  width: 100%;
-  margin-bottom: 20px;
-}
-
-:deep(.judge-select .el-input__inner) {
-  height: 48px;
-  font-size: 16px;
-}
-
-:deep(.judge-select .el-select-dropdown__item) {
-  padding: 12px 20px;
-}
-
-.judge-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.judge-name {
-  font-weight: 600;
-  color: #333;
-}
-
-.judge-desc {
-  color: #666;
-  font-size: 14px;
-}
-
-.judge-preview {
-  padding: 16px;
-  background: #f0f9ff;
-  border-radius: 8px;
-  border-left: 4px solid #409eff;
-}
-
-.preview-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #409eff;
-  margin-bottom: 8px;
-}
-
-.preview-desc {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
-}
-
-/* 策略选择 */
+/* ─────────────── 策略选择卡片 ─────────────── */
 .strategy-select-section {
-  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
 }
 
 .strategy-options {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: var(--spacing-lg);
 }
 
 .strategy-option {
-  padding: 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
+  position: relative;
+  padding: var(--spacing-xl);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  transition: all 0.3s;
-  background: white;
+  background: var(--bg-primary);
+  transition: all var(--transition-hover);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
 }
 
 .strategy-option:hover {
-  border-color: #409eff;
+  border-color: var(--primary-purple-light);
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .strategy-option.active {
-  border-color: #409eff;
-  background: #ecf5ff;
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+  border-color: var(--primary-purple);
+  background: var(--primary-purple-lightest);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12), var(--shadow-card);
 }
 
 .strategy-option-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
-.strategy-icon {
-  font-size: 32px;
+.strategy-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition-hover);
 }
 
-.strategy-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
+.strategy-option.active .strategy-icon-wrap {
+  background: var(--bg-overlay);
+}
+
+.strategy-svg {
+  width: 22px;
+  height: 22px;
+  color: var(--primary-purple);
+}
+
+.strategy-title-text {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .strategy-description {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 12px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
   line-height: 1.6;
 }
 
 .strategy-features {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .strategy-feature {
-  font-size: 13px;
-  color: #606266;
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
-.strategy-feature:last-child {
-  margin-bottom: 0;
+.feature-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary-purple);
+  flex-shrink: 0;
+}
+
+/* 策略选中勾 */
+.strategy-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 22px;
+  height: 22px;
+  color: var(--accent-green);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all var(--transition-base);
+}
+
+.strategy-option.active .strategy-check {
+  opacity: 1;
+  transform: scale(1);
 }
 </style>
+
