@@ -23,8 +23,19 @@
       <div class="welcome-card card-hover fade-in">
         <div class="welcome-icon-svg" aria-hidden="true">
           <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M32 8L12 20v24l20 12 20-12V20L32 8z" stroke="var(--primary-purple)" stroke-width="2" stroke-linejoin="round" fill="var(--primary-purple-lightest)"/>
-            <path d="M32 32V8M12 20l20 12 20-12M12 44l20-12 20 12" stroke="var(--primary-purple)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+            <!-- 天平底座 -->
+            <path d="M12 52h40" stroke="var(--primary-purple)" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M20 52v-4h24v4" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- 立柱 -->
+            <path d="M32 52V28" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round"/>
+            <!-- 横梁 -->
+            <path d="M18 28h28" stroke="var(--primary-purple)" stroke-width="2" stroke-linecap="round"/>
+            <!-- 左盘 + 吊线 -->
+            <path d="M18 28v6l-6 8h12l-6-8v-6" stroke="var(--primary-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="var(--primary-purple-lightest)" opacity="0.9"/>
+            <!-- 右盘 + 吊线 -->
+            <path d="M46 28v6l6 8H40l6-8v-6" stroke="var(--primary-purple)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="var(--primary-purple-lightest)" opacity="0.9"/>
+            <!-- 顶部装饰（象征公正/AI） -->
+            <circle cx="32" cy="22" r="5" stroke="var(--primary-purple)" stroke-width="1.8" fill="var(--primary-purple-lightest)"/>
           </svg>
         </div>
         <h2 class="welcome-title">欢迎使用智能模拟法庭</h2>
