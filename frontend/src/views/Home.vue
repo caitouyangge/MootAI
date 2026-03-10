@@ -160,7 +160,11 @@ const goToCourtroom = () => {
 }
 
 .page-banner.fade-in {
-  animation: homeFadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  /* 首屏横幅：带轻微 3D 下落 + 光感 */
+  transform-origin: center top;
+  animation:
+    homeHeroDrop 1s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both,
+    homeHeroGlow 1.8s ease-out 0.4s both;
 }
 
 .page-banner::before {
@@ -209,17 +213,45 @@ const goToCourtroom = () => {
 }
 
 .welcome-card.fade-in {
-  animation: homeFadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+  /* 主卡片：稍晚于横幅的上升动画 */
+  animation: homeCardRise 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
 
-@keyframes homeFadeInUp {
+@keyframes homeHeroDrop {
   from {
     opacity: 0;
-    transform: translateY(18px) scale(0.98);
+    transform: translateY(-28px) scale(0.96) rotateX(-10deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotateX(0deg);
+    filter: blur(0);
+  }
+}
+
+@keyframes homeHeroGlow {
+  from {
+    box-shadow: 0 0 0 rgba(6, 182, 212, 0.0);
+  }
+  40% {
+    box-shadow: 0 14px 40px rgba(6, 182, 212, 0.55);
+  }
+  to {
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+@keyframes homeCardRise {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.96);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
@@ -335,6 +367,32 @@ const goToCourtroom = () => {
   align-items: center;
   gap: 10px;
   min-width: 100px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  animation: featurePop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+}
+
+.feature-item:nth-child(2) {
+  animation-delay: 0.7s;
+}
+
+.feature-item:nth-child(3) {
+  animation-delay: 0.9s;
+}
+
+@keyframes featurePop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .feature-icon {
@@ -372,6 +430,9 @@ const goToCourtroom = () => {
   border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 8px 32px rgba(6, 182, 212, 0.40);
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  animation: ctaEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.1s forwards;
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
@@ -382,6 +443,21 @@ const goToCourtroom = () => {
 
 .start-button:active {
   transform: scale(0.98) translateY(0);
+}
+
+@keyframes ctaEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .button-icon-svg {
