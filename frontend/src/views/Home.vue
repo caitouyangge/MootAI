@@ -1,34 +1,20 @@
 <template>
   <div class="home-page">
+    <AnimatedBackground
+      class="page-bg"
+      :enable-ripples="true"
+      :click-to-ripple="true"
+    />
     <!-- 顶部分割/装饰线 -->
     <div class="top-accent" aria-hidden="true"></div>
 
-    <!-- 页面标题区域：紫色渐变 + 几何/线条装饰 -->
+    <!-- 页面标题区域 -->
     <div class="page-banner fade-in">
       <div class="banner-content">
         <div class="banner-title-wrap">
           <h1 class="banner-title">智能模拟法庭</h1>
         </div>
         <p class="banner-subtitle">AI驱动的拟真法庭辩论模拟系统</p>
-      </div>
-      <!-- 几何/线条装饰（替代 emoji） -->
-      <div class="banner-decoration">
-        <svg class="deco-shape deco-1" viewBox="0 0 120 120" aria-hidden="true">
-          <circle cx="60" cy="60" r="45" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-          <circle cx="60" cy="60" r="28" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.8"/>
-          <line x1="60" y1="15" x2="60" y2="105" stroke="rgba(255,255,255,0.12)" stroke-width="0.6"/>
-          <line x1="15" y1="60" x2="105" y2="60" stroke="rgba(255,255,255,0.12)" stroke-width="0.6"/>
-        </svg>
-        <svg class="deco-shape deco-2" viewBox="0 0 80 80" aria-hidden="true">
-          <path d="M10 40 Q40 10 70 40 Q40 70 10 40" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
-          <path d="M25 40 Q40 25 55 40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.8"/>
-        </svg>
-        <svg class="deco-shape deco-3" viewBox="0 0 100 60" aria-hidden="true">
-          <rect x="5" y="5" width="35" height="50" rx="2" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-          <rect x="60" y="5" width="35" height="50" rx="2" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-          <line x1="22" y1="20" x2="22" y2="45" stroke="rgba(255,255,255,0.08)" stroke-width="0.6"/>
-          <line x1="77" y1="20" x2="77" y2="45" stroke="rgba(255,255,255,0.08)" stroke-width="0.6"/>
-        </svg>
       </div>
     </div>
 
@@ -105,6 +91,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import AnimatedBackground from '@/components/AnimatedBackground.vue'
 
 const router = useRouter()
 
@@ -125,42 +112,17 @@ const goToCourtroom = () => {
 <style scoped>
 .home-page {
   min-height: 100vh;
-  /* 玻璃感底座：冷暖叠加渐变 + 更通透的底色 */
-  background:
-    radial-gradient(900px 520px at 12% 10%, rgba(99, 102, 241, 0.18), transparent 62%),
-    radial-gradient(780px 480px at 88% 16%, rgba(6, 182, 212, 0.14), transparent 58%),
-    radial-gradient(820px 520px at 70% 92%, rgba(168, 85, 247, 0.14), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.35));
   padding-bottom: 60px;
   position: relative;
   isolation: isolate;
+  overflow: hidden;
 }
 
-/* 背景光斑与噪点：让 blur 更“有东西可糊” */
-.home-page::before,
-.home-page::after {
-  content: '';
+/* 背景（与欢迎页同一套） */
+.page-bg {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   z-index: 0;
-}
-
-.home-page::before {
-  background:
-    radial-gradient(520px 380px at 18% 22%, rgba(255, 255, 255, 0.22), transparent 60%),
-    radial-gradient(520px 420px at 86% 34%, rgba(255, 255, 255, 0.14), transparent 62%),
-    radial-gradient(640px 520px at 52% 88%, rgba(0, 0, 0, 0.10), transparent 62%);
-  filter: blur(18px);
-  opacity: 0.9;
-}
-
-.home-page::after {
-  /* 轻噪点：避免大面积纯色导致“塑料感” */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-  mix-blend-mode: overlay;
-  opacity: 0.22;
 }
 
 /* 顶部分割/装饰线：产品首屏感 */
@@ -168,18 +130,19 @@ const goToCourtroom = () => {
   height: 3px;
   max-width: 200px;
   margin: 0 auto 32px;
+  position: relative;
+  z-index: 1;
 }
 
-/* 页面横幅：紫色渐变 + 几何装饰 */
+/* 页面横幅：纯色 + 几何装饰（无渐变） */
 .page-banner {
   position: relative;
-  background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-light) 100%);
+  background: var(--primary-purple);
   border-radius: var(--radius-xl);
   padding: 36px 24px;
   margin-bottom: 32px;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  /* 与下方主卡片容器统一宽度，避免两张“卡片”宽度不一致 */
   max-width: 720px;
   margin-left: auto;
   margin-right: auto;
@@ -187,15 +150,7 @@ const goToCourtroom = () => {
 }
 
 .page-banner::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -10%;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
-  border-radius: 50%;
-  animation: float 6s ease-in-out infinite;
+  display: none;
 }
 
 .banner-content {
@@ -228,45 +183,6 @@ const goToCourtroom = () => {
   opacity: 0.9;
   margin: 0;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* 几何/线条装饰 */
-.banner-decoration {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-}
-
-.deco-shape {
-  position: absolute;
-  color: rgba(255, 255, 255, 0.35);
-}
-
-.deco-1 {
-  width: 100px;
-  height: 100px;
-  top: 18%;
-  left: 8%;
-  animation: float 5s ease-in-out infinite;
-}
-
-.deco-2 {
-  width: 70px;
-  height: 70px;
-  top: 28%;
-  right: 12%;
-  animation: float 4s ease-in-out infinite 0.5s;
-}
-
-.deco-3 {
-  width: 90px;
-  height: 54px;
-  bottom: 18%;
-  left: 15%;
-  animation: float 5.5s ease-in-out infinite 1s;
 }
 
 /* 内容区域：加大上下留白 */
@@ -304,9 +220,13 @@ const goToCourtroom = () => {
   inset: 0;
   border-radius: inherit;
   background:
+    /* 细点阵纹理：增强“卡片背景小图案”的可见度 */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'%3E%3Cg fill='none'%3E%3Ccircle cx='6' cy='6' r='1.2' fill='%236366f1' opacity='0.18'/%3E%3Ccircle cx='22' cy='18' r='1.0' fill='%236366f1' opacity='0.14'/%3E%3Ccircle cx='34' cy='34' r='1.2' fill='%236366f1' opacity='0.18'/%3E%3Ccircle cx='14' cy='30' r='0.9' fill='%236366f1' opacity='0.12'/%3E%3C/g%3E%3C/svg%3E"),
     radial-gradient(520px 220px at 20% 10%, rgba(255, 255, 255, 0.60), transparent 60%),
     radial-gradient(520px 240px at 90% 0%, rgba(255, 255, 255, 0.25), transparent 62%);
-  opacity: 0.55;
+  background-size: 44px 44px, auto, auto;
+  background-repeat: repeat, no-repeat, no-repeat;
+  opacity: 0.72;
   pointer-events: none;
   mix-blend-mode: overlay;
 }

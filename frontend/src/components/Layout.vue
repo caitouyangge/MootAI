@@ -132,14 +132,22 @@ onMounted(() => {
   background: var(--bg-secondary);
 }
 
-/* 顶部导航栏 */
+/* 顶部导航栏：毛玻璃（透出下方紫色渐变） */
 .top-navbar {
   position: sticky;
   top: 0;
   z-index: 1000;
-  background: var(--bg-primary);
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: var(--shadow-md);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .top-navbar {
+    background: rgba(255, 255, 255, 0.88);
+  }
 }
 
 .navbar-container {

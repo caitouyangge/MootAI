@@ -4,6 +4,11 @@
     @mousemove="handleMouseMove" 
     @mouseleave="handleMouseLeave"
   >
+    <AnimatedBackground
+      class="courtroom-bg"
+      :enable-ripples="true"
+      :click-to-ripple="true"
+    />
     <!-- 左侧边栏 -->
     <div 
       class="sidebar" 
@@ -120,7 +125,6 @@
           <span class="tab-icon">{{ tab.icon }}</span>
           <span class="tab-text">{{ tab.name }}</span>
           <span v-if="isStepDisabled(tab.key)" class="tab-lock">🔒</span>
-          <div class="tab-indicator"></div>
         </div>
       </div>
 
@@ -186,6 +190,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import PreTrial from '@/components/PreTrial.vue'
 import Debate from '@/components/Debate.vue'
 import Verdict from '@/components/Verdict.vue'
+import AnimatedBackground from '@/components/AnimatedBackground.vue'
 import { useCaseStore } from '@/stores/case'
 
 const route = useRoute()
@@ -478,13 +483,20 @@ onUnmounted(() => {
 .courtroom-page {
   width: 100%;
   min-height: calc(100vh - 64px);
-  background: var(--bg-secondary);
   position: relative;
   padding: 0;
+  overflow: hidden;
   /* 确保页面可见 */
   opacity: 1 !important;
   visibility: visible !important;
   display: block !important;
+}
+
+/* 与主页面同一套背景 + 水波纹 */
+.courtroom-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
 
 /* 左侧边栏 */
@@ -649,6 +661,8 @@ onUnmounted(() => {
   margin: 0 auto;
   transition: margin-left var(--transition-base);
   width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
 /* 页面标题 */
@@ -715,7 +729,6 @@ onUnmounted(() => {
 
 .title-icon {
   font-size: 20px;
-  animation: float 3s ease-in-out infinite;
 }
 
 .title-text {
@@ -800,22 +813,6 @@ onUnmounted(() => {
   font-size: var(--font-size-xs);
 }
 
-.tab-indicator {
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 3px;
-  background: var(--text-white);
-  border-radius: 2px;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.nav-tab.active .tab-indicator {
-  opacity: 1;
-}
 
 /* 内容区域 */
 .content-area {
