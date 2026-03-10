@@ -668,7 +668,9 @@ onUnmounted(() => {
 .page-header {
   margin-bottom: 16px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-light) 100%);
+  background: rgba(6, 182, 212, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   position: relative;
@@ -711,7 +713,9 @@ onUnmounted(() => {
   right: -10%;
   width: 400px;
   height: 400px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 50%;
   animation: float 6s ease-in-out infinite;
 }
@@ -782,7 +786,9 @@ onUnmounted(() => {
 }
 
 .nav-tab.active {
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-light));
+  background: rgba(6, 182, 212, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--text-white);
   box-shadow: var(--shadow-md);
 }
@@ -830,7 +836,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  background: rgba(240, 249, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius-md);
   border-left: 4px solid var(--primary-purple);
   margin-bottom: 16px;

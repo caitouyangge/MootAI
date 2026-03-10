@@ -214,7 +214,9 @@ const switchToLogin = () => {
   transform: translate(-50%, -50%);
   width: 160px;
   height: 160px;
-  background: radial-gradient(circle, rgba(6, 182, 212, 0.25), transparent 70%);
+  background: rgba(6, 182, 212, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 50%;
   animation: pulse 2.5s ease-in-out infinite;
 }
@@ -227,10 +229,7 @@ const switchToLogin = () => {
   display: block;
   font-size: clamp(48px, 6vw, 64px);
   font-weight: 300;
-  background: linear-gradient(160deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 45%, rgba(220, 210, 255, 0.9) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: rgba(255, 255, 255, 0.98);
   letter-spacing: 0.2em;
   margin-bottom: 10px;
 }
@@ -268,7 +267,9 @@ const switchToLogin = () => {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: 1px solid rgba(255,255,255,0.06);
   opacity: 0.8;
 }
@@ -302,7 +303,9 @@ const switchToLogin = () => {
   font-weight: 600;
   letter-spacing: 0.08em;
   color: #fff;
-  background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+  background: rgba(6, 182, 212, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: none;
   border-radius: 999px;
   cursor: pointer;

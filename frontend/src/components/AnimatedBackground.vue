@@ -139,25 +139,17 @@ const getParticleStyle = () => {
 .bg-gradient {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    var(--primary-purple-lightest) 0%,
-    var(--primary-purple-lighter) 25%,
-    var(--primary-purple-light) 50%,
-    var(--primary-purple) 75%,
-    var(--primary-purple-dark) 100%
-  );
-  background-size: 400% 400%;
-  animation: gradientShift 15s ease infinite;
+  background: rgba(6, 182, 212, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .bg-mesh {
   position: absolute;
   inset: 0;
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% 15%, rgba(255,255,255,0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 75% 85%, rgba(255,255,255,0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 35% at 25% 70%, rgba(6, 182, 212, 0.06) 0%, transparent 50%);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   pointer-events: none;
 }
 
@@ -225,21 +217,12 @@ const getParticleStyle = () => {
   position: absolute;
   inset: -14px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.20)) 0%,
-    rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.08)) 35%,
-    rgba(255, 255, 255, 0) 70%
-  );
+  background: rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.25));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   opacity: 0;
   animation: rippleGlow var(--ripple-duration, 2.8s) var(--ripple-delay, 0s) ease-out forwards;
   pointer-events: none;
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 @keyframes float {

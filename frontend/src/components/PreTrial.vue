@@ -1329,7 +1329,9 @@ onMounted(async () => {
 }
 
 .sub-nav-btn.active {
-  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%);
+  background: rgba(64, 158, 255, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-color: #409eff;
   color: white;
 }
