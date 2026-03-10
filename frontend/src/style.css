@@ -1,14 +1,15 @@
 /* ============================================
-   MootAI - 桌面端紫色主题样式系统
+   MootAI - 桌面端青色主题样式系统
+   目标配色占比（视觉面积）：青色约70% / 白色约20% / 绿色约10%
    ============================================ */
 
 :root {
-  /* 紫色主题色 */
-  --primary-purple: #8b5cf6;
-  --primary-purple-dark: #7c3aed;
-  --primary-purple-light: #a78bfa;
-  --primary-purple-lighter: #c4b5fd;
-  --primary-purple-lightest: #e9d5ff;
+  /* 主题主色（沿用历史变量名，便于全站自动切换）- 青色系 */
+  --primary-purple: #06b6d4;         /* cyan-500 */
+  --primary-purple-dark: #0891b2;    /* cyan-600 */
+  --primary-purple-light: #22d3ee;   /* cyan-400 */
+  --primary-purple-lighter: #67e8f9; /* cyan-300 */
+  --primary-purple-lightest: #cffafe;/* cyan-100 */
   
   /* 辅助色 */
   --white: #ffffff;
@@ -21,27 +22,30 @@
   --text-tertiary: #999999;
   --text-white: #ffffff;
   
-  /* 背景色 */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #f1f3f5;
-  --bg-overlay: rgba(139, 92, 246, 0.1);
+  /* 背景色（青色占比更高：页面大底更偏青，卡片/面板保持白） */
+  --bg-primary: #ffffff;   /* 卡片/面板/输入等主要“白色面积” */
+  --bg-secondary: #e6fffb; /* 页面主背景（青色大底） */
+  --bg-tertiary: #f0fffe;  /* 次级青色背景（分区/浅底） */
+  --bg-overlay: rgba(6, 182, 212, 0.12);
   
   /* 边框和阴影 */
   --border-color: #e5e7eb;
-  --shadow-sm: 0 1px 2px rgba(139, 92, 246, 0.1);
-  --shadow-md: 0 4px 6px rgba(139, 92, 246, 0.15);
-  --shadow-lg: 0 10px 15px rgba(139, 92, 246, 0.2);
-  --shadow-xl: 0 20px 25px rgba(139, 92, 246, 0.25);
+  --shadow-sm: 0 1px 2px rgba(6, 182, 212, 0.10);
+  --shadow-md: 0 4px 6px rgba(6, 182, 212, 0.16);
+  --shadow-lg: 0 10px 15px rgba(6, 182, 212, 0.22);
+  --shadow-xl: 0 20px 25px rgba(6, 182, 212, 0.28);
   /* 卡片悬浮：略大、略柔，用于 Welcome/Home 等卡片 */
-  --shadow-card: 0 12px 40px rgba(139, 92, 246, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
-  --shadow-card-hover: 0 20px 50px rgba(139, 92, 246, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  --shadow-card: 0 12px 40px rgba(6, 182, 212, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+  --shadow-card-hover: 0 20px 50px rgba(6, 182, 212, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.55) inset;
   
   /* 点缀色：重要数字、徽章、专业版等标签 */
   --accent-gold: #B8860B;
   --accent-gold-light: #D4A84B;
   --accent-blue: #1e40af;
   --accent-blue-light: #3b82f6;
+  --accent-green: #22c55e;
+  --accent-green-dark: #16a34a;
+  --accent-green-soft: #dcfce7;
   
   /* 动画时长 */
   --transition-fast: 0.15s;
@@ -298,7 +302,7 @@ body {
   box-shadow: var(--shadow-card-hover);
 }
 .cta-hover:hover {
-  box-shadow: 0 12px 48px rgba(139, 92, 246, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 48px rgba(6, 182, 212, 0.50), 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
 /* 标题与主按钮使用无衬线字体 */
@@ -309,6 +313,8 @@ h1, h2, h3, h4, .el-button, .cta-primary, .start-button, .login-btn {
 /* 点缀色工具类：重要数字、徽章、专业版标签等 */
 .text-accent-gold { color: var(--accent-gold); }
 .text-accent-blue { color: var(--accent-blue); }
+.text-accent-green { color: var(--accent-green); }
+.bg-accent-green-soft { background: var(--accent-green-soft); }
 .badge-accent {
   background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
   color: #fff;
@@ -322,6 +328,23 @@ h1, h2, h3, h4, .el-button, .cta-primary, .start-button, .login-btn {
 /* ============================================
    Element Plus 主题覆盖 - 桌面端优化
    ============================================ */
+
+/* Element Plus 全局变量：主按钮青色，成功态绿色 */
+:root {
+  --el-color-primary: var(--primary-purple);
+  --el-color-primary-dark-2: var(--primary-purple-dark);
+  --el-color-primary-light-3: var(--primary-purple-light);
+  --el-color-primary-light-5: var(--primary-purple-lighter);
+  --el-color-primary-light-7: var(--primary-purple-lightest);
+  --el-color-primary-light-9: rgba(6, 182, 212, 0.10);
+
+  --el-color-success: var(--accent-green);
+  --el-color-success-dark-2: var(--accent-green-dark);
+  --el-color-success-light-3: rgba(34, 197, 94, 0.70);
+  --el-color-success-light-5: rgba(34, 197, 94, 0.50);
+  --el-color-success-light-7: rgba(34, 197, 94, 0.30);
+  --el-color-success-light-9: rgba(34, 197, 94, 0.12);
+}
 
 .el-button {
   font-size: var(--font-size-base);
@@ -474,7 +497,7 @@ h1, h2, h3, h4, .el-button, .cta-primary, .start-button, .login-btn {
 
 .el-textarea__inner:focus {
   border-color: var(--primary-purple);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12);
 }
 
 /* 桌面端最小宽度限制 */

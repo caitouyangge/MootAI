@@ -64,7 +64,7 @@
 
     <!-- 登录（无遮罩，直接叠在背景上） -->
     <transition name="modal">
-      <div class="modal-overlay" v-if="showLoginForm" @click.self="closeLogin">
+      <div class="modal-overlay" v-if="showLoginForm">
         <button type="button" class="back-to-welcome" @click.stop="closeLogin" aria-label="返回">
           <span class="back-arrow" aria-hidden="true">
             <svg class="back-arrow-icon" viewBox="0 0 24 24" fill="none">
@@ -79,7 +79,7 @@
 
     <!-- 注册（无遮罩） -->
     <transition name="modal">
-      <div class="modal-overlay" v-if="showRegisterForm" @click.self="closeRegister">
+      <div class="modal-overlay" v-if="showRegisterForm">
         <button type="button" class="back-to-welcome" @click.stop="closeRegister" aria-label="返回">
           <span class="back-arrow" aria-hidden="true">
             <svg class="back-arrow-icon" viewBox="0 0 24 24" fill="none">
@@ -117,15 +117,22 @@ function addRipple(ev) {
   if (waterRipples.value.length >= MAX_RIPPLES) return
   const id = ++rippleId
   const isClick = ev && ev instanceof MouseEvent
+  // 点击产生的波纹需要更“显眼”，随机背景波纹保持克制
+  const baseOpacity = isClick ? 0.42 : 0.26
+  const randOpacity = isClick ? 0.18 : 0.18
+  const baseStroke = isClick ? 1.7 : 1.2
+  const randStroke = isClick ? 1.1 : 0.9
+  const baseSize = isClick ? 90 : 60
+  const randSize = isClick ? 260 : 200
   waterRipples.value.push({
     id,
     x: isClick ? (ev.clientX / window.innerWidth) * 100 : 8 + Math.random() * 84,
     y: isClick ? (ev.clientY / window.innerHeight) * 100 : 12 + Math.random() * 76,
-    size: 50 + Math.random() * 180,
-    duration: 1.0 + Math.random() * 2.5,
+    size: baseSize + Math.random() * randSize,
+    duration: (isClick ? 1.35 : 1.1) + Math.random() * 2.2,
     delay: isClick ? 0 : Math.random() * 0.4,
-    opacity: 0.22 + Math.random() * 0.22,
-    stroke: 1.0 + Math.random() * 1.0
+    opacity: baseOpacity + Math.random() * randOpacity,
+    stroke: baseStroke + Math.random() * randStroke
   })
 }
 
@@ -222,7 +229,7 @@ const getParticleStyle = (index) => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  cursor: pointer;
+  cursor: default;
   background: var(--bg-secondary);
 }
 
@@ -263,7 +270,7 @@ const getParticleStyle = (index) => {
   background-image:
     radial-gradient(ellipse 80% 50% at 50% 15%, rgba(255,255,255,0.18) 0%, transparent 55%),
     radial-gradient(ellipse 60% 40% at 75% 85%, rgba(255,255,255,0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 35% at 25% 70%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+    radial-gradient(ellipse 50% 35% at 25% 70%, rgba(6, 182, 212, 0.06) 0%, transparent 50%);
   pointer-events: none;
 }
 
@@ -281,14 +288,17 @@ const getParticleStyle = (index) => {
 .ripple {
   position: absolute;
   border-radius: 50%;
-  border: calc(var(--ripple-stroke, 1.5) * 1px) solid rgba(255, 255, 255, var(--ripple-opacity, 0.35));
+  border: calc(var(--ripple-stroke, 1.5) * 1px) solid rgba(255, 255, 255, var(--ripple-opacity, 0.42));
   box-shadow:
     0 0 0 0 rgba(255, 255, 255, 0),
-    inset 0 0 12px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.4));
+    0 0 18px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.35)),
+    inset 0 0 18px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.55));
   transform: translate(-50%, -50%) scale(0);
   opacity: 1;
   animation: rippleExpand var(--ripple-duration, 2.8s) var(--ripple-delay, 0s) cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   will-change: transform, opacity, border-color, box-shadow;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.22)));
 }
 
 .ripple::before {
@@ -296,36 +306,67 @@ const getParticleStyle = (index) => {
   position: absolute;
   inset: -2px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.5));
+  border: 1px solid rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.7));
   opacity: 0;
   animation: rippleRing 2.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.ripple::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.20)) 0%,
+    rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.08)) 35%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  opacity: 0;
+  animation: rippleGlow var(--ripple-duration, 2.8s) var(--ripple-delay, 0s) ease-out forwards;
+  pointer-events: none;
 }
 
 @keyframes rippleExpand {
   0% {
     transform: translate(-50%, -50%) scale(0);
     opacity: 1;
-    border-color: rgba(255, 255, 255, var(--ripple-opacity, 0.35));
+    border-color: rgba(255, 255, 255, var(--ripple-opacity, 0.42));
     box-shadow:
-      0 0 0 0 rgba(255, 255, 255, 0.12),
-      inset 0 0 12px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.5));
+      0 0 0 0 rgba(255, 255, 255, 0.18),
+      0 0 24px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.35)),
+      inset 0 0 22px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.68));
   }
-  35% {
-    border-color: rgba(255, 255, 255, calc(var(--ripple-opacity, 0.35) * 0.9));
+  18% {
+    opacity: 1;
+    border-color: rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 1.0));
+    box-shadow:
+      0 0 0 0 rgba(255, 255, 255, 0.22),
+      0 0 34px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.42)),
+      inset 0 0 26px rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.72));
+  }
+  42% {
+    border-color: rgba(255, 255, 255, calc(var(--ripple-opacity, 0.42) * 0.95));
   }
   100% {
-    transform: translate(-50%, -50%) scale(2.2);
+    transform: translate(-50%, -50%) scale(2.85);
     opacity: 0;
     border-color: rgba(255, 255, 255, 0);
     box-shadow:
-      0 0 20px 2px rgba(255, 255, 255, 0),
-      inset 0 0 24px rgba(255, 255, 255, 0);
+      0 0 32px 2px rgba(255, 255, 255, 0),
+      inset 0 0 30px rgba(255, 255, 255, 0);
   }
 }
 
 @keyframes rippleRing {
   0% { transform: scale(0.5); opacity: 0.6; }
   100% { transform: scale(1.1); opacity: 0; }
+}
+
+@keyframes rippleGlow {
+  0% { transform: scale(0.55); opacity: 0; }
+  12% { opacity: 0.85; }
+  100% { transform: scale(1.25); opacity: 0; }
 }
 
 /* 极淡噪声纹理 */
@@ -355,7 +396,7 @@ const getParticleStyle = (index) => {
   background: rgba(255, 255, 255, 0.35);
   border-radius: 50%;
   animation: float 3s ease-in-out infinite;
-  box-shadow: 0 0 6px rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.25);
 }
 
 /* 仅内容区上移离场（背景不动），更慢更弹 */
@@ -410,7 +451,7 @@ const getParticleStyle = (index) => {
 
 .logo-icon {
   font-size: 80px;
-  filter: drop-shadow(0 8px 24px rgba(139, 92, 246, 0.35));
+  filter: drop-shadow(0 8px 24px rgba(6, 182, 212, 0.35));
   position: relative;
   z-index: 1;
 }
@@ -434,7 +475,7 @@ const getParticleStyle = (index) => {
   transform: translate(-50%, -50%);
   width: 160px;
   height: 160px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.25), transparent 70%);
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.25), transparent 70%);
   border-radius: 50%;
   animation: pulse 2.5s ease-in-out infinite;
 }
@@ -526,13 +567,13 @@ const getParticleStyle = (index) => {
   border: none;
   border-radius: 999px;
   cursor: pointer;
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 8px 32px rgba(6, 182, 212, 0.40);
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
 .cta-primary:hover {
   transform: scale(1.04) translateY(-2px);
-  box-shadow: 0 12px 48px rgba(139, 92, 246, 0.55), 0 0 0 1px rgba(255,255,255,0.08);
+  box-shadow: 0 12px 48px rgba(6, 182, 212, 0.50), 0 0 0 1px rgba(255,255,255,0.08);
 }
 
 .cta-primary:active {
@@ -558,15 +599,17 @@ const getParticleStyle = (index) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  /* 允许点击穿透到背景触发水波纹 */
+  pointer-events: none;
 }
 
 /* 背景上方的返回：^ + 返回 */
 .back-to-welcome {
-  position: absolute;
+  position: fixed;
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: 1101;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -578,9 +621,17 @@ const getParticleStyle = (index) => {
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  cursor: pointer;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  user-select: none;
   opacity: 1;
   transition: opacity 0.22s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.back-to-welcome,
+.back-to-welcome * {
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
 .back-to-welcome:hover {
@@ -604,6 +655,9 @@ const getParticleStyle = (index) => {
 .back-text {
   font-size: 12px;
   opacity: 0.95;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  user-select: none;
 }
 
 /* 去掉子组件自带的遮罩背景，保留点击关闭 */
@@ -613,6 +667,16 @@ const getParticleStyle = (index) => {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   animation: none !important;
+  /* 保留全屏 overlay 用于拦截背景点击；把“返回”按钮抬到它上面 */
+  z-index: 1000 !important;
+  /* 但本页需要背景可点击出水波纹，所以 overlay 自身不吃事件 */
+  pointer-events: none !important;
+}
+
+/* 表单本体仍需可交互 */
+.modal-overlay :deep(.login-form-container),
+.modal-overlay :deep(.register-form-container) {
+  pointer-events: auto !important;
 }
 
 /* 去掉子组件内部任何入场动画，避免与转场 transform 叠加 */

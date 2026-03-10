@@ -265,7 +265,7 @@ const goToCourtroom = () => {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(139, 92, 246, 0.18);
+  border: 1px solid rgba(6, 182, 212, 0.18);
   border-radius: var(--card-radius);
   padding: 56px 40px 48px;
   text-align: center;
@@ -312,9 +312,9 @@ const goToCourtroom = () => {
   flex-wrap: wrap;
   margin-bottom: 40px;
   padding: 24px 16px;
-  background: rgba(139, 92, 246, 0.04);
+  background: rgba(6, 182, 212, 0.05);
   border-radius: 16px;
-  border: 1px solid rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(6, 182, 212, 0.10);
 }
 
 .feature-item {
@@ -359,13 +359,13 @@ const goToCourtroom = () => {
   border: none;
   border-radius: 999px;
   cursor: pointer;
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 8px 32px rgba(6, 182, 212, 0.40);
   transition: transform var(--transition-hover) ease, box-shadow var(--transition-hover) ease;
 }
 
 .start-button:hover {
   transform: scale(1.04) translateY(-2px);
-  box-shadow: 0 12px 48px rgba(139, 92, 246, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 48px rgba(6, 182, 212, 0.50), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .start-button:active {

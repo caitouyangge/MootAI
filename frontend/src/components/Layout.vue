@@ -208,7 +208,7 @@ onMounted(() => {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.10), transparent);
   transition: left var(--transition-base);
 }
 
@@ -223,7 +223,7 @@ onMounted(() => {
 
 .menu-item.active {
   color: var(--primary-purple);
-  background: rgba(139, 92, 246, 0.12);
+  background: rgba(6, 182, 212, 0.12);
   font-weight: 600;
 }
 
@@ -237,7 +237,7 @@ onMounted(() => {
   height: 3px;
   background: linear-gradient(90deg, transparent, var(--primary-purple), transparent);
   border-radius: 3px 3px 0 0;
-  box-shadow: 0 -1px 2px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 -1px 2px rgba(6, 182, 212, 0.30);
 }
 
 .menu-icon {

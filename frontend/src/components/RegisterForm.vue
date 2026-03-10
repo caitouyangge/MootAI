@@ -291,10 +291,10 @@ const handleRegister = async () => {
   box-shadow: 
     var(--shadow-xl),
     0 0 0 1px rgba(255, 255, 255, 0.6) inset,
-    0 32px 64px -12px rgba(139, 92, 246, 0.18);
+    0 32px 64px -12px rgba(6, 182, 212, 0.18);
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.12);
 }
 
 .form-decoration {
@@ -359,7 +359,7 @@ const handleRegister = async () => {
   border-radius: 50%;
   background: linear-gradient(135deg, var(--primary-purple-light), var(--primary-purple));
   position: relative;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.30);
 }
 
 .form-icon-register::after {
@@ -549,13 +549,13 @@ const handleRegister = async () => {
   background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
   border: none;
   transition: all var(--transition-base);
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
 }
 
 .register-btn:hover {
   background: linear-gradient(135deg, var(--primary-purple-dark), var(--primary-purple));
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.40);
 }
 
 .register-btn:active {
