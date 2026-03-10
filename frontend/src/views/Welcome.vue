@@ -1,6 +1,6 @@
 <template>
   <div class="welcome-page" @click="onBackgroundClick">
-    <!-- 动态紫色背景 -->
+    <!-- 动态紫色背景（保持不动） -->
     <div class="animated-background">
       <div class="bg-gradient"></div>
       <div class="bg-mesh"></div>
@@ -28,9 +28,10 @@
       </div>
       <div class="bg-noise" aria-hidden="true"></div>
     </div>
-    
-    <!-- 主要内容 -->
-    <div class="welcome-content" :class="{ 'fade-out': showLoginForm || showRegisterForm }">
+
+    <!-- 仅内容区上移离场 -->
+    <div class="welcome-content-wrap" :class="{ 'scene-exit': isModalOpen }">
+      <div class="welcome-content">
       <!-- Logo和标题区域 -->
       <div class="hero-section fade-in">
         <div class="logo-container float">
@@ -57,20 +58,36 @@
         <button type="button" class="cta-primary cta-hover" @click.stop="showLogin">
           登录 / 注册
         </button>
-        <p class="cta-hint">点击上方按钮进入 MootAI</p>
+      </div>
       </div>
     </div>
-    
-    <!-- 登录弹窗 -->
+
+    <!-- 登录（无遮罩，直接叠在背景上） -->
     <transition name="modal">
       <div class="modal-overlay" v-if="showLoginForm" @click.self="closeLogin">
+        <button type="button" class="back-to-welcome" @click.stop="closeLogin" aria-label="返回">
+          <span class="back-arrow" aria-hidden="true">
+            <svg class="back-arrow-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M5.5 14.5L12 8l6.5 6.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="back-text">返回</span>
+        </button>
         <LoginForm @close="closeLogin" @switch-to-register="switchToRegister" />
       </div>
     </transition>
-    
-    <!-- 注册弹窗 -->
+
+    <!-- 注册（无遮罩） -->
     <transition name="modal">
       <div class="modal-overlay" v-if="showRegisterForm" @click.self="closeRegister">
+        <button type="button" class="back-to-welcome" @click.stop="closeRegister" aria-label="返回">
+          <span class="back-arrow" aria-hidden="true">
+            <svg class="back-arrow-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M5.5 14.5L12 8l6.5 6.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="back-text">返回</span>
+        </button>
         <RegisterForm @close="closeRegister" @switch-to-login="switchToLogin" />
       </div>
     </transition>
@@ -84,6 +101,11 @@ import RegisterForm from '@/components/RegisterForm.vue'
 
 const showLoginForm = ref(false)
 const showRegisterForm = ref(false)
+/** 任一弹窗打开时为 true，用于保持欢迎场景上移状态（避免登录⇄注册切换时场景回弹） */
+const isModalOpen = ref(false)
+const WELCOME_MS = 600
+const MODAL_MS = 600
+let openSeq = 0
 
 // 水圈波纹：随机生成，带物理感
 const waterRipples = ref([])
@@ -132,16 +154,37 @@ onUnmounted(() => {
 
 const showLogin = () => {
   if (!showLoginForm.value && !showRegisterForm.value) {
-    showLoginForm.value = true
+    isModalOpen.value = true
+    // 串行：先让欢迎内容离场，再让登录入场，避免两者重叠
+    const seq = ++openSeq
+    window.setTimeout(() => {
+      if (seq !== openSeq) return
+      showLoginForm.value = true
+    }, WELCOME_MS)
   }
 }
 
 const closeLogin = () => {
+  openSeq++
   showLoginForm.value = false
+  // 串行：先让登录离场，再让欢迎内容回场
+  if (!showRegisterForm.value) {
+    window.setTimeout(() => {
+      if (showLoginForm.value || showRegisterForm.value) return
+      isModalOpen.value = false
+    }, MODAL_MS)
+  }
 }
 
 const closeRegister = () => {
+  openSeq++
   showRegisterForm.value = false
+  if (!showLoginForm.value) {
+    window.setTimeout(() => {
+      if (showLoginForm.value || showRegisterForm.value) return
+      isModalOpen.value = false
+    }, MODAL_MS)
+  }
 }
 
 const switchToRegister = () => {
@@ -315,6 +358,22 @@ const getParticleStyle = (index) => {
   box-shadow: 0 0 6px rgba(139, 92, 246, 0.25);
 }
 
+/* 仅内容区上移离场（背景不动），更慢更弹 */
+.welcome-content-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  will-change: transform;
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.welcome-content-wrap.scene-exit {
+  transform: translateY(-100%);
+}
+
 /* 主要内容 */
 .welcome-content {
   position: relative;
@@ -325,7 +384,6 @@ const getParticleStyle = (index) => {
   justify-content: space-between;
   height: 100%;
   padding: 40px;
-  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .welcome-content.fade-out {
@@ -489,80 +547,141 @@ const getParticleStyle = (index) => {
   letter-spacing: 0.04em;
 }
 
-/* 弹窗覆盖层 */
+/* 无遮罩层，仅居中放置表单；点击空白处仍可关闭 */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.52);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 
-/* 弹窗过渡：丝滑奢华感 */
-.modal-enter-active {
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-              backdrop-filter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.modal-enter-active > * {
-  transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  transition-delay: 0.06s;
-  will-change: transform, opacity;
+/* 背景上方的返回：^ + 返回 */
+.back-to-welcome {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.22s ease, color 0.2s ease, transform 0.2s ease;
 }
 
-.modal-leave-active {
-  transition: opacity 0.35s cubic-bezier(0.4, 0, 1, 1),
-              backdrop-filter 0.3s cubic-bezier(0.4, 0, 1, 1);
-  transition-delay: 0.12s;
+.back-to-welcome:hover {
+  color: #fff;
 }
-.modal-leave-active > * {
-  transition: transform 0.32s cubic-bezier(0.4, 0, 1, 1),
-              opacity 0.28s cubic-bezier(0.4, 0, 1, 1);
-  will-change: transform, opacity;
+
+.back-to-welcome:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+.back-arrow {
+  display: block;
+}
+
+.back-arrow-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.back-text {
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+/* 去掉子组件自带的遮罩背景，保留点击关闭 */
+.modal-overlay :deep(.login-form-overlay),
+.modal-overlay :deep(.register-form-overlay) {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: none !important;
+}
+
+/* 去掉子组件内部任何入场动画，避免与转场 transform 叠加 */
+.modal-overlay :deep(.login-form-container),
+.modal-overlay :deep(.register-form-container),
+.modal-overlay :deep(.login-form),
+.modal-overlay :deep(.register-form) {
+  animation: none !important;
+}
+
+/* 过渡：更慢更弹，登录/注册从底部上移入画 */
+.modal-enter-active,
+.modal-leave-active {
+  /* 保持不透明（不做淡入淡出），但提供过渡时长给 Vue，用于正确等待 enter/leave 完成 */
+  transition: opacity 0.6s linear;
+}
+
+.modal-enter-active :deep(.login-form-container),
+.modal-enter-active :deep(.register-form-container),
+.modal-leave-active :deep(.login-form-container),
+.modal-leave-active :deep(.register-form-container) {
+  animation: none;
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
 }
 
 .modal-enter-from {
-  opacity: 0;
-  backdrop-filter: blur(0);
-  -webkit-backdrop-filter: blur(0);
+  opacity: 1;
 }
-.modal-enter-from > * {
-  transform: scale(0.94) translateY(28px);
+.modal-enter-from .back-to-welcome {
   opacity: 0;
+  transform: translateX(-50%) translateY(-4px);
+}
+.modal-enter-from :deep(.login-form-container),
+.modal-enter-from :deep(.register-form-container) {
+  transform: translateY(110vh);
 }
 
 .modal-enter-to {
   opacity: 1;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
-.modal-enter-to > * {
-  transform: scale(1) translateY(0);
-  opacity: 1;
+.modal-enter-active .back-to-welcome {
+  transition-delay: 0.6s;
+}
+.modal-enter-to :deep(.login-form-container),
+.modal-enter-to :deep(.register-form-container) {
+  transform: translateY(0);
 }
 
 .modal-leave-from {
   opacity: 1;
 }
-.modal-leave-from > * {
-  transform: scale(1) translateY(0);
-  opacity: 1;
+.modal-leave-active .back-to-welcome {
+  transition-delay: 0s;
+}
+.modal-leave-to .back-to-welcome {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-4px);
+}
+.modal-leave-from :deep(.login-form-container),
+.modal-leave-from :deep(.register-form-container) {
+  transform: translateY(0);
 }
 
 .modal-leave-to {
-  opacity: 0;
-  backdrop-filter: blur(0);
-  -webkit-backdrop-filter: blur(0);
+  opacity: 1;
 }
-.modal-leave-to > * {
-  transform: scale(0.96) translateY(16px);
-  opacity: 0;
+.modal-leave-to :deep(.login-form-container),
+.modal-leave-to :deep(.register-form-container) {
+  transform: translateY(110vh);
 }
 </style>

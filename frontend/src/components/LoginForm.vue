@@ -1,18 +1,12 @@
 <template>
   <div class="login-form-overlay" @click.self="$emit('close')">
-    <div class="login-form-container scale-in">
+    <div class="login-form-container">
       <div class="login-form">
-        <!-- 关闭按钮 -->
-        <div class="close-btn" @click.stop="handleClose">
-          <span>×</span>
-        </div>
-        
         <!-- 装饰背景 -->
         <div class="form-decoration"></div>
         
         <!-- 标题 -->
         <div class="form-header">
-          <div class="form-icon form-icon-lock" aria-hidden="true"></div>
           <h2 class="form-title">登录</h2>
           <p class="form-subtitle">欢迎回来</p>
         </div>

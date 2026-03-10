@@ -1,12 +1,7 @@
 <template>
   <div class="register-form-overlay" @click.self="$emit('close')">
-    <div class="register-form-container scale-in">
+    <div class="register-form-container">
       <div class="register-form">
-        <!-- 关闭按钮 -->
-        <div class="close-btn" @click.stop="handleClose">
-          <span>×</span>
-        </div>
-        
         <!-- 装饰背景 -->
         <div class="form-decoration"></div>
         
