@@ -1,12 +1,5 @@
 <template>
   <div class="welcome-page">
-    <!-- 动态紫色背景（与主页面同一套） -->
-    <AnimatedBackground
-      class="page-bg"
-      :enable-ripples="true"
-      :click-to-ripple="true"
-    />
-
     <!-- 仅内容区上移离场 -->
     <div class="welcome-content-wrap" :class="{ 'scene-exit': isModalOpen }">
       <div class="welcome-content">
@@ -76,7 +69,6 @@
 import { ref } from 'vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
-import AnimatedBackground from '@/components/AnimatedBackground.vue'
 
 const showLoginForm = ref(false)
 const showRegisterForm = ref(false)
@@ -143,14 +135,7 @@ const switchToLogin = () => {
   height: 100vh;
   overflow: hidden;
   cursor: default;
-  background: var(--bg-secondary);
-}
-
-/* 背景（与主页面同一套） */
-.page-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
+  background: transparent;
 }
 
 /* 仅内容区上移离场（背景不动），更慢更弹 */

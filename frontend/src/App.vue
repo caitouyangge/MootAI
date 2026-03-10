@@ -1,16 +1,50 @@
 <script setup>
 import { RouterView } from 'vue-router'
+import AnimatedBackground from '@/components/AnimatedBackground.vue'
 </script>
 
 <template>
-  <router-view v-slot="{ Component, route }">
-    <transition name="page-fade" mode="out-in">
-      <component :is="Component" :key="route.path" />
-    </transition>
-  </router-view>
+  <div class="app-root">
+    <!-- 全局背景：始终挂载，避免路由切换时闪白 -->
+    <AnimatedBackground
+      class="app-bg"
+      :enable-ripples="true"
+      :click-to-ripple="true"
+    />
+
+    <!-- 路由内容层：在背景之上做转场 -->
+    <div class="app-main">
+      <router-view v-slot="{ Component, route }">
+        <transition name="page-fade" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </transition>
+      </router-view>
+    </div>
+  </div>
 </template>
 
 <style>
+/* App 根容器：承载全局背景 + 路由内容 */
+.app-root {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+
+/* 全局背景：固定铺满视口，位于所有内容下方 */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* 主内容层：盖在背景之上 */
+.app-main {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+}
+
 /* 路由转场：丝滑淡入淡出 */
 .page-fade-enter-active,
 .page-fade-leave-active {

@@ -4,11 +4,6 @@
     @mousemove="handleMouseMove" 
     @mouseleave="handleMouseLeave"
   >
-    <AnimatedBackground
-      class="courtroom-bg"
-      :enable-ripples="true"
-      :click-to-ripple="true"
-    />
     <!-- 左侧边栏 -->
     <div 
       class="sidebar" 
@@ -190,7 +185,6 @@ import { Refresh } from '@element-plus/icons-vue'
 import PreTrial from '@/components/PreTrial.vue'
 import Debate from '@/components/Debate.vue'
 import Verdict from '@/components/Verdict.vue'
-import AnimatedBackground from '@/components/AnimatedBackground.vue'
 import { useCaseStore } from '@/stores/case'
 
 const route = useRoute()

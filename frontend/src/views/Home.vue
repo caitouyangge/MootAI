@@ -1,10 +1,5 @@
 <template>
   <div class="home-page">
-    <AnimatedBackground
-      class="page-bg"
-      :enable-ripples="true"
-      :click-to-ripple="true"
-    />
     <!-- 顶部分割/装饰线 -->
     <div class="top-accent" aria-hidden="true"></div>
 
@@ -103,7 +98,6 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import AnimatedBackground from '@/components/AnimatedBackground.vue'
 
 const router = useRouter()
 
@@ -141,13 +135,6 @@ const goToCourtroom = () => {
   overflow: hidden;
 }
 
-/* 背景：固定铺满视口并置于导航栏之下（z-index 0），毛玻璃可透出；内容区用 position + z-index 盖在上方 */
-.page-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-}
-
 /* 顶部分割/装饰线：产品首屏感 */
 .top-accent {
   height: 3px;
@@ -170,6 +157,10 @@ const goToCourtroom = () => {
   margin-left: auto;
   margin-right: auto;
   z-index: 1;
+}
+
+.page-banner.fade-in {
+  animation: homeFadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
 }
 
 .page-banner::before {
@@ -215,6 +206,21 @@ const goToCourtroom = () => {
   padding: 48px 24px 32px;
   position: relative;
   z-index: 1;
+}
+
+.welcome-card.fade-in {
+  animation: homeFadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+
+@keyframes homeFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* 产品卡片：玻璃态 + 卡片悬浮阴影 + 统一 hover */
